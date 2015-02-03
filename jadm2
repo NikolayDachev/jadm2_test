@@ -1,0 +1,197 @@
+#!/usr/bin/env python
+########################################################################################
+# Jadm2 license information
+#
+'''
+Copyright (c) <2015>, <Nikolay Georgiev Dachev> <nikolay@dachev.info>
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+'''
+########################################################################################
+# Python modules
+# datetime - used for current date/time on event
+# tabulate - used to print useful infomration in table format
+# os, sys, subprocess - used for comunication with FreeBSD
+# netifaces - used for check FreeBSD bridge interfaces
+# ipaddress - used to check if jail ip is from gateway network
+# cmd - used for jadm command shell
+# paramiko - used for jail migration via ssh
+# socket - jadm client/server
+# AES - aes encryption
+# base64 aes encription help
+
+from datetime import datetime
+from tabulate import tabulate
+from ipaddress import *
+import os
+import sys
+import subprocess
+import netifaces
+import cmd
+import paramiko
+import socket
+from Crypto.Cipher import AES
+import base64
+
+########################################################################################
+# Main config vars:
+########################################################################################
+
+# jadm version
+jadm_version = "ver. 2.0"
+
+# jail.conf location by default /etc/jail.conf
+jailconf = '/etc/jail.conf'
+
+# jadm log file
+logfile = '/var/log/jadm.log'
+
+# empty vars
+bridge_int = ''
+jzfs = ''
+jpath = ''
+
+# jadm don't show verbose output by defult
+verbose = 0
+
+# jadm server
+LHOST = '0.0.0.0'
+LPORT = 4555
+
+# network config
+
+# vnet
+vnet = [
+'### network settings ###',
+'vnet;',
+'$bridge = "";',
+'$epair = "epair$jid";',
+'$a = "a";',
+'$b = "b";',
+'$newmac = "dd if=/dev/urandom bs=1024 count=1 2>/dev/null|md5|sed ''s/^\\(..\\)\\(..\\)\\(..\\).*$/02\\:ff\\:c0\\:\\1:\\2:\\3/''";',
+'vnet.interface = "$epair$b";',
+'exec.start = "ifconfig lo0 127.0.0.1/8";',
+'exec.prestart = "ifconfig $epair create";',
+'exec.prestart += "$newmac |xargs ifconfig $epair$b ether";',
+'exec.prestart += "ifconfig $bridge addm $epair$a up";',
+'exec.prestart += "ifconfig $epair$a up";',
+'exec.start += "ifconfig $epair$b $jip";',
+'exec.start += "route add default $jgw";',
+'exec.start += "/bin/sh /etc/rc";',
+'exec.poststop = "ifconfig $bridge deletem $epair$a";',
+'exec.poststop += "ifconfig $epair$a destroy";',
+'exec.stop = "/bin/sh /etc/rc.shutdown";',
+'exec.clean;',
+'persist;'
+]
+
+# no vnet
+net = [
+'### network settings ###',
+'ip4.addr = "$jip";',
+'exec.start = "/bin/sh /etc/rc";',
+'exec.stop = "/bin/sh /etc/rc.shutdown";',
+'persist;',
+]
+
+########################################################################################
+# Main Functions
+########################################################################################
+
+def load_jail_config(conf_f):
+   """
+########################################################################################
+# load_jail_config - load default jail conf file and return a list with jail dictionary .
+#  {'name':'jail name', 'host.hostname':'jail hostname', 'jid':'jail id', '$jip':'jail ip address ',
+#  '$jgw':'jail gateway','path':'jail home dir', 'vnet':'is this vnet jail', 'zfs':'is thi zfs jail'}
+#
+   """
+# open jail.conf
+   jc = open(conf_f, 'r')
+
+# take all elements from jail.conf, remove "junk" data and applay to mas[]
+# only data which will be used is taken, all valuse are in order
+   mas = []
+   for i in jc:
+      i = i.strip('\n').strip(';').replace('\"', '').replace(' ', '')
+      i = i.split('=')
+      mas.append(i)
+   jc.close()
+
+# find all jails names
+   jsname = []
+# enumerate in order to avoid wrong index for similiar items like {
+# take only elements which are before { symbol
+   for i, x in enumerate(mas):
+      if "{" in x:
+         jsname.append(mas[i - 1])
+
+# Jails Configuration in dict format.
+   jails = []
+
+   for i in jsname:
+      jail_dict = {'name':i[0], 'host.hostname':'', 'jid':'', '$jip':'', '$jgw':'','path':''}
+      i = mas.index(i)
+      for x in mas[i:]:
+         if x[0] in jail_dict.keys():
+            jail_dict[x[0]] = x[1]
+
+# is this a vnet jail ?
+         if x[0] == 'vnet':
+            jail_dict['vnet'] = 1
+         elif x[0] == 'ip4.addr':
+            jail_dict['vnet'] = 0
+
+# is this zfs jail ?
+         if x[0] == 'path':
+             jail_dict['zfs'] = zfs(x[1])[2]
+
+# end go with next jail
+         if '}' in x:
+            jails.append(jail_dict)
+            break
+
+   return jails
+
+def zfs(zvalue = None):
+   """
+########################################################################################
+# check if zvalue is in OS zfs list (mountpoint or zfs name)
+# return (zfs names, zfs mountpoints, is exist zfs (1 yes, 0 no))
+#
+   """
+
+# check curent zfs pool
+   zfs_name = subprocess.check_output("zfs list -H -o name", shell=True)
+   zfs_name = zfs_name.split('\n')
+
+   zfs_mountp = subprocess.check_output("zfs list -H -o mountpoint", shell=True)
+   zfs_mountp = zfs_mountp.split('\n')
+
+# check if zvalue is in zfs(path or mountpoint)
+   iszfs = 0
+   if zvalue in zfs_name:
+      iszfs = 1
+
+   if zvalue in zfs_mountp:
+      iszfs = 1
+
+   return (zfs_name, zfs_mountp, iszfs)
+
+print zfs()[2]
+print " "
+print load_jail_config(jailconf)
