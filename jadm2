@@ -68,6 +68,9 @@ jpath = ''
 # jadm don't show verbose output by defult
 verbose = 0
 
+# local settings start index
+_Lsettings = '###localsettings###'
+
 # jadm server
 LHOST = '0.0.0.0'
 LPORT = 4555
@@ -138,15 +141,38 @@ def load_jail_config(conf_f):
 # take only elements which are before { symbol
    for i, x in enumerate(mas):
       if "{" in x:
-         jsname.append(mas[i - 1])
+        jsname.append([mas[i - 1]])
 
 # Jails Configuration in dict format.
    jails = []
 
    for i in jsname:
-      jail_dict = {'name':i[0], 'host.hostname':'', 'jid':'', '$jip':'', '$jgw':'','path':''}
-      i = mas.index(i)
-      for x in mas[i:]:
+      jail_dict = {'name':i[0], 'host.hostname':'', 'jid':'', '$jip':'',
+                   '$jgw':'','path':''}
+
+      i = mas.index(i[0])
+      jail_dict['jbegin'] = i
+
+# Cehck jail index's (end and local_settigs)
+      x = 0
+      for i in mas[jail_dict['jbegin']:]:
+         x = x + 1
+# Find jail local settings
+         if i == _Lsettings:
+            jail_local_settings = jail_dict['jbegin'] + x
+# Find jail end index
+         if "}" in i:
+            jail_dict['jend'] = jail_dict['jbegin'] + x
+            break
+
+# Find jail local settings
+      jlsettings_list = []
+      for x in mas[jail_local_settings:jail_dict['jend']]:
+          jlsettings_list.append(x)
+      jail_dict['local_settings'] = jlsettings_list
+
+# All main jail settings
+      for x in mas[jail_dict['jbegin']:jail_dict['jend']]:
          if x[0] in jail_dict.keys():
             jail_dict[x[0]] = x[1]
 
@@ -160,10 +186,8 @@ def load_jail_config(conf_f):
          if x[0] == 'path':
              jail_dict['zfs'] = zfs(x[1])[2]
 
-# end go with next jail
-         if '}' in x:
-            jails.append(jail_dict)
-            break
+# end add this jail and go with the next one
+      jails.append(jail_dict)
 
    return jails
 
