@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 ########################################################################################
-# Jadm2 license information
+# Jadm license information
 #
 '''
 Copyright (c) <2015>, <Nikolay Georgiev Dachev> <nikolay@dachev.info>
@@ -68,35 +68,34 @@ jpath = ''
 # jadm don't show verbose output by defult
 verbose = 0
 
-# local settings start index
-_Lsettings = '###localsettings###'
+# settings start index in jail.conf
+_Gsettings = '#global_settings@'
+_Lsettings = '#local_settings@'
 
 # jadm server
 LHOST = '0.0.0.0'
 LPORT = 4555
 
 # network config
+# newmac generate random mac address option in jail.conf
+newmac = "$newmac = \"dd if=/dev/urandom bs=1024 count=1 2>/dev/null|md5|sed 's/^\\\\(..\\\\)\\\\(..\\\\)\\\\(..\\\\).*$/02\\\\:ff\\\\:c0\\\\:\\\\1:\\\\2:\\\\3/'\";"
 
 # vnet
 vnet = [
-'### network settings ###',
+'#network_settings@',
 'vnet;',
-'$bridge = "";',
-'$epair = "epair$jid";',
-'$a = "a";',
-'$b = "b";',
-'$newmac = "dd if=/dev/urandom bs=1024 count=1 2>/dev/null|md5|sed ''s/^\\(..\\)\\(..\\)\\(..\\).*$/02\\:ff\\:c0\\:\\1:\\2:\\3/''";',
-'vnet.interface = "$epair$b";',
+'vnet.interface = "epair${jid}b";',
+newmac,
 'exec.start = "ifconfig lo0 127.0.0.1/8";',
-'exec.prestart = "ifconfig $epair create";',
-'exec.prestart += "$newmac |xargs ifconfig $epair$b ether";',
-'exec.prestart += "ifconfig $bridge addm $epair$a up";',
-'exec.prestart += "ifconfig $epair$a up";',
-'exec.start += "ifconfig $epair$b $jip";',
+'exec.prestart = "ifconfig epair${jid} create";',
+'exec.prestart += "$newmac |xargs ifconfig epair${jid}b ether";',
+'exec.prestart += "ifconfig $bridge addm epair${jid}a up";',
+'exec.prestart += "ifconfig epair${jid}a up";',
+'exec.start += "ifconfig epair${jid}b $jip";',
 'exec.start += "route add default $jgw";',
 'exec.start += "/bin/sh /etc/rc";',
-'exec.poststop = "ifconfig $bridge deletem $epair$a";',
-'exec.poststop += "ifconfig $epair$a destroy";',
+'exec.poststop = "ifconfig $bridge deletem epair${jid}a";',
+'exec.poststop += "ifconfig epair${jid}a destroy";',
 'exec.stop = "/bin/sh /etc/rc.shutdown";',
 'exec.clean;',
 'persist;'
@@ -104,7 +103,7 @@ vnet = [
 
 # no vnet
 net = [
-'### network settings ###',
+'#network_settings@',
 'ip4.addr = "$jip";',
 'exec.start = "/bin/sh /etc/rc";',
 'exec.stop = "/bin/sh /etc/rc.shutdown";',
@@ -129,8 +128,12 @@ def load_jail_config(conf_f):
 # take all elements from jail.conf, remove "junk" data and applay to mas[]
 # only data which will be used is taken, all valuse are in order
    mas = []
+   not_sorted_mas = []
    for i in jc:
-      i = i.strip('\n').strip(';').replace('\"', '').replace(' ', '')
+      i = i.strip('\n')
+# create raw list from file ony \n is removed
+      not_sorted_mas.append(i)
+      i = i.strip(';').replace('\"', '').replace(' ', '')
       i = i.split('=')
       mas.append(i)
    jc.close()
@@ -147,7 +150,7 @@ def load_jail_config(conf_f):
    jails = []
 
    for i in jsname:
-      jail_dict = {'name':i[0], 'host.hostname':'', 'jid':'', '$jip':'',
+      jail_dict = {'name':i[0][0], 'host.hostname':'', 'jid':'', '$jip':'',
                    '$jgw':'','path':''}
 
       i = mas.index(i[0])
@@ -155,19 +158,24 @@ def load_jail_config(conf_f):
 
 # Cehck jail index's (end and local_settigs)
       x = 0
-      for i in mas[jail_dict['jbegin']:]:
+      jail_local_settings_index = 0
+      for z in mas[jail_dict['jbegin']:]:
          x = x + 1
-# Find jail local settings
-         if i == _Lsettings:
-            jail_local_settings = jail_dict['jbegin'] + x
+# Find jail local settingss
+         if z[0] == _Lsettings:
+            jail_local_settings_index = jail_dict['jbegin'] + x
+
 # Find jail end index
-         if "}" in i:
+         if "}" in z:
+            x -= 1
             jail_dict['jend'] = jail_dict['jbegin'] + x
             break
 
-# Find jail local settings
+# add local settings index on firs place in list (us original jc[] )
       jlsettings_list = []
-      for x in mas[jail_local_settings:jail_dict['jend']]:
+      jlsettings_list.append(jail_local_settings_index)
+
+      for x in not_sorted_mas[jail_local_settings_index : jail_dict['jend']]:
           jlsettings_list.append(x)
       jail_dict['local_settings'] = jlsettings_list
 
@@ -182,23 +190,43 @@ def load_jail_config(conf_f):
          elif x[0] == 'ip4.addr':
             jail_dict['vnet'] = 0
 
+# do we have a bridge interface?
+         if x[0] == '$bridge':
+            jail_dict['$bridge'] = x[1]
+
 # is this zfs jail ?
          if x[0] == 'path':
-             jail_dict['zfs'] = zfs(x[1])[2]
+             zfs_check = zfs(x[1])
+             jail_dict['zfs'] = zfs_check[2]
 
 # end add this jail and go with the next one
       jails.append(jail_dict)
 
-   return jails
+# find all jail.conf global settings
+   global_settings = []
+   for i in mas:
+       if i[0] == _Gsettings:
+           gb = mas.index(i) + 1
+           global_settings.append(gb)
+       if i[0] == _Gsettings + '@':
+           ge = mas.index(i)
+           global_settings.append(ge)
+
+   for i in not_sorted_mas[global_settings[0]:global_settings[1]]:
+       global_settings.append(i)
+
+
+# return a list with all jails from jail.conf and list with all global settings
+
+   return (jails, global_settings)
 
 def zfs(zvalue = None):
    """
 ########################################################################################
 # check if zvalue is in OS zfs list (mountpoint or zfs name)
-# return (zfs names, zfs mountpoints, is exist zfs (1 yes, 0 no))
+# return (zfs names, zfs mountpoints, zfs ( 0 if not exist))
 #
    """
-
 # check curent zfs pool
    zfs_name = subprocess.check_output("zfs list -H -o name", shell=True)
    zfs_name = zfs_name.split('\n')
@@ -208,14 +236,27 @@ def zfs(zvalue = None):
 
 # check if zvalue is in zfs(path or mountpoint)
    iszfs = 0
-   if zvalue in zfs_name:
-      iszfs = 1
-
    if zvalue in zfs_mountp:
-      iszfs = 1
+      iszfs = subprocess.check_output("zfs list -H %s" % zvalue, shell=True)
+      iszfs = iszfs.strip('\n').split('\t')
 
    return (zfs_name, zfs_mountp, iszfs)
 
-print zfs()[2]
+########################################################################################
+# Start Jadm script
+########################################################################################
+
 print " "
-print load_jail_config(jailconf)
+jails =  load_jail_config(jailconf)[0]
+global_settings = load_jail_config(jailconf)[1]
+
+for x in jails:
+   if x['name']  == 'test1':
+      print x
+      print x.keys()
+
+print global_settings
+
+########################################################################################
+# End Jadm script
+########################################################################################
