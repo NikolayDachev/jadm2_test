@@ -158,7 +158,7 @@ def load_jail_config(conf_f):
 
    for i in jsname:
       jail_dict = {'name':i[0][0], 'host.hostname':'', 'jid':'', '$jip':'',
-                   '$jgw':'','path':''}
+                   '$jgw':'','path':'', 'zfs':0}
 
       i = mas.index(i[0])
       jail_dict['jbegin'] = i
