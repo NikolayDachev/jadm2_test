@@ -69,7 +69,6 @@ jpath = ''
 verbose = 0
 
 # settings start index in jail.conf
-_Gsettings = '#global_settings@'
 _Lsettings = '#local_settings@'
 
 # jadm server
@@ -131,6 +130,7 @@ def load_jail_config(conf_f):
    not_sorted_mas = []
    for i in jc:
       i = i.strip('\n')
+      i = i.strip('\t')
 # create raw list from file ony \n is removed
       not_sorted_mas.append(i)
       i = i.strip(';').replace('\"', '').replace(' ', '')
@@ -225,22 +225,18 @@ def load_jail_config(conf_f):
             act = 'dying'
       jail_dict['active'] = act
 
-# find all jail.conf global settings
+# find all jail.conf global settings (ignore # comments)
+# search jail.conf from 0 line to first jail{} line
    global_settings = []
-   for i in mas:
-       if i[0] == _Gsettings:
-           gb = mas.index(i) + 1
-           global_settings.append(gb)
-       if i[0] == _Gsettings + '@':
-           ge = mas.index(i)
-           global_settings.append(ge)
-
-   for i in not_sorted_mas[global_settings[0]:global_settings[1]]:
-       global_settings.append(i)
-
+   for i in not_sorted_mas[0:mas.index(jsname[0][0])]:
+       if '#' in i:
+           pass
+       else:
+           global_settings.append(i.strip(';').replace(' ', ''))
+# remove all empty elements from list
+   global_settings = [x for x in global_settings if x]
 
 # return a list with all jails from jail.conf and list with all global settings
-
    return (jails, global_settings)
 
 def zfs(zvalue = None):
@@ -291,10 +287,89 @@ def jail_table(mcmd):
    """
    jails = load_jail_config(jailconf)[0]
 
+   jails_configs = []
+   if len(mcmd) > 1:
+       if mcmd[1] in ('ip', 'gw'):
+           mcmd[1] = '$j' + mcmd[1]
+       if mcmd[1] == 'hostname':
+           mcmd[1] = 'host.hostname'
+
+   if len(mcmd) == 3:
+       for i in jails:
+           if mcmd[1] not in i.keys():
+               pass
+           elif mcmd[2] in i[mcmd[1]]:
+               jails_configs.append(i)
+# list olny jails with quota / usage >= from user search
+           if i['zfs'] != 0:
+              if mcmd[2][-1] not in ('K', 'M', 'G', 'T', 'P', 'E'):
+                  return False
+
+              if mcmd[1] == 'quota':
+                  jquota = float(i['zfs'][-2][:-1])
+                  jquota = bytesto(jquota, i['zfs'][-2][-1])
+                  search_quota = float(mcmd[2][:-1])
+                  search_quota = bytesto(search_quota, mcmd[2][-1])
+                  if int(jquota) >= int(search_quota):
+                    jails_configs.append(i)
+
+              elif mcmd[1] == 'used':
+                  jused = float(i['zfs'][1][:-1])
+                  jused = bytesto(jused, i['zfs'][1][-1])
+                  search_used = float(mcmd[2][:-1])
+                  search_used = bytesto(search_used, mcmd[2][-1])
+                  if int(jused) >= int(search_used):
+                     jails_configs.append(i)
+
+           jails = jails_configs
+
+   if len(mcmd) == 2:
+       for i in jails:
+           if mcmd[1] == 'active':
+               if i['active'] == 1:
+                  jails_configs.append(i)
+           elif mcmd[1] == 'inactive':
+               if i['active'] == 0:
+                  jails_configs.append(i)
+           elif mcmd[1] == 'dying':
+               if i['active'] == 'dying':
+                  jails_configs.append(i)
+           elif mcmd[1] == i['name']:
+               jails_configs.append(i)
+           elif mcmd[1] == i['jid']:
+               jails_configs.append(i)
+           elif mcmd[1] == 'zfs':
+               if i['zfs'] != 0:
+                  jails_configs.append(i)
+           elif mcmd[1] == 'nozfs':
+               if i['zfs'] == 0:
+                  jails_configs.append(i)
+           elif mcmd[1] == 'skel':
+               if 'SKEL' in i.keys():
+                  jails_configs.append(i)
+           elif mcmd[1] == 'noskel':
+               if 'SKEL' not in i.keys():
+                  jails_configs.append(i)
+           elif mcmd[1] == 'vnet':
+               if i['vnet'] == 1:
+                  jails_configs.append(i)
+           elif mcmd[1] == 'novnet':
+               if i['vnet'] == 0:
+                  jails_configs.append(i)
+           jails = jails_configs
+
+   if len(jails) == 0:
+       return False
+
 # create a jails table list
    jlist = []
    for i in jails:
        jail_temp_list = []
+       jail_temp_list.append('')
+       if 'SKEL' in i.keys():
+           jail_temp_list[0] =  jail_temp_list[0] + 'S'
+       if i['vnet'] == 1:
+           jail_temp_list[0] =  jail_temp_list[0] + 'V'
        jail_temp_list.append(i['active'])
        jail_temp_list.append(i['jid'])
        jail_temp_list.append(i['name'])
@@ -303,6 +378,7 @@ def jail_table(mcmd):
        jail_temp_list.append(i['$jgw'])
        jail_temp_list.append(i['path'])
        if i['zfs'] != 0:
+          jail_temp_list[0] =  jail_temp_list[0] + 'Z'
           jail_temp_list.append('%s/%s' % (i['zfs'][1], i['zfs'][2]))
           jail_temp_list.append(i['zfs'][-2])
           jail_temp_list.append(i['zfs'][-1])
@@ -310,20 +386,39 @@ def jail_table(mcmd):
           jail_temp_list.append('n/a')
           jail_temp_list.append('n/a')
           jail_temp_list.append('n/a')
+       if i['active'] == 'dying':
+          jail_temp_list[0] = jail_temp_list[0] + '_DYING'
 
        if mcmd[0] == 'jls':
-           jail_temp_list = jail_temp_list[:5]
+           jail_temp_list = jail_temp_list[:6]
        jlist.append(jail_temp_list)
 
 # table menu
-   lmen = ["ACTIVE", "JID", "NAME", "HOSTNAME", "IP ADDRESS", "GATEWAY", "PATH", "USED/AVAIL SPACE", "ZFS QUOTA",  "ZFS SNAPSHOTS"]
+   lmen = ["FLAGS", "ACTIVE", "JID", "NAME", "HOSTNAME", "IP ADDRESS", "GATEWAY", "PATH", "USED/AVAIL SPACE", "ZQUOTA",  "ZSNAP"]
 # check if we use short list - jls
    if mcmd[0] == 'jls':
-       lmen = ["ACTIVE", "JID", "NAME", "HOSTNAME", "IP ADDRESS"]
+       lmen = ["FLAGS", "ACTIVE", "JID", "NAME", "HOSTNAME", "IP ADDRESS"]
 
+   print tabulate(jlist, lmen)
 
-   tlist = jlist
-   print tabulate(tlist, lmen)
+def bytesto(bytes, to, bsize=1024):
+   """
+########################################################################################
+# convert bytes to megabytes, etc.
+# sample code:
+# print('mb= ' + str(bytesto(314575262000000, 'm')))
+#
+# sample output:
+# mb= 300002347.946
+# from: https://gist.github.com/shawnbutts/3906915
+   """
+
+   a = {'K' : 1, 'M': 2, 'G' : 3, 'T' : 4, 'P' : 5, 'E' : 6 }
+   r = float(bytes)
+   for i in range(a[to]):
+      r = r * bsize
+
+   return(r)
 
 ########################################################################################
 # MAIN MENU
@@ -339,22 +434,42 @@ class lcmd(cmd.Cmd):
 
    local_global = ['list',  'remove',  'add']
    snap = ['list', 'create',  'remove',  'restore']
-   listcmd = ['list', 'skel',  'hostname',  'ip',  'gw',  'active',  'inactive', 'dying']
+   listcmd = ['list', 'hostname',  'ip',  'gw',
+              'active',  'inactive', 'dying',
+              'vnet', 'novnet', 'zfs', 'nozfs',
+              'skel', 'noskel', 'quota', 'used']
    mserver = ['server',  'client']
 
    def do_list(self, arg):
-      """ List of jails
+      """ List of jails in table format
+      - FLAGS
+      S - skeleton model jail
+      V - vnet jail
+      Z - zfs jail
+      _DYING - dying jail
+
       - usage: list
 
       (search options)
-      - actvie (usage: list active)
-      - inactive (usage: list inactive)
-      - dying (usage: list dying)
-      - skel (usage: list skel )
+      - only actvie jails (usage: list active)
+      - only inactive jails (usage: list inactive)
+      - only dying jails (usage: list dying)
       - by name (usage: list 'name/jid' )
       - by hostname (usage: list hostname 'jail hostname' )
-      - by ipaddress (usage: list ip 'ipaddress')
-      - by gateway (usage: list gw 'gateway ip')
+      - by path (usage: lisy path '/jail/home/path' )
+      - by ipaddress (usage: list ip 'ipaddress' )
+      - by gateway (usage: list gw 'gateway ip' )
+      - only vnet jails (usage: list vnet )
+      - only none vnet jails (usage: list novnet )
+      - only skel jails (usage: list skel )
+      - only none skel jails (usage: list noskel )
+      - only none zfs jails (usage list nozfs)
+      --- apply only on zfs jails ---
+      - only zfs jails (usage: list zfs)
+      - by zfs quota (usage: list quota 'xxx('K', 'M', 'G', 'T', 'P', 'E')')
+      show jails with quota = or > form x number
+      - by zfs used space (usage: list used xxx('K', 'M', 'G', 'T', 'P', 'E')')
+      show jails with used space = or > form x number
       """
       arg = str(arg).split(' ')
 
@@ -372,18 +487,16 @@ class lcmd(cmd.Cmd):
          return completions
 
    def do_jls(self,  arg):
-      """ Short list of jails
+      """ Short list of jails in table format
+      - FLAGS
+      S - skeleton model jail
+      V - vnet jail
+      Z - zfs jail
+      _DYING - jails is dying
+
       - usage: jls
 
-      (search options)
-      - actvie (usage: jls active)
-      - inactive (usage: jls inactive)
-      - dying (usage: jls dying)
-      - skel (usage: jls skel )
-      - by name (usage: jls 'name/jid' )
-      - by hostname (usage: jls hostname 'jail hostname' )
-      - by ipaddress (usage: jls ip 'ipaddress')
-      - by gateway (usage: jls gw 'gateway ip')
+        same as list (show jails table in short format)
       """
       arg = str(arg).split(' ')
       arg.insert(0,'jls')
@@ -401,10 +514,47 @@ class lcmd(cmd.Cmd):
 def cli():
    """
 ########################################################################################
-#  jadm comand line interface
+#  jadm command line interface
 #
    """
-   print "jadm cli"
+   if sys.argv[1] in ['-y', '-v', '-c', '-m', '-i']:
+
+# cli verbose mode for start/stop jail
+         if sys.argv[1] == '-v':
+            verbose = 1
+            # prtin and add to log file
+            logmsg = "      INFO: verbose mode enable"
+            log(logmsg)
+
+# cli auto confirm
+
+         if '-y' in sys.argv:
+            sys.argv[ sys.argv.index('-y')] = 'autoConfirm:yes'
+         else:
+             sys.argv.append('autoConfirm:no')
+
+# cli create jail
+         if sys.argv[1] == '-c':
+            jail_create_cli(sys.argv)
+            sys.exit(0)
+
+# cli modify jail
+         if sys.argv[1] == '-m':
+            print "jadm cli modify"
+            sys.exit(0)
+
+
+# cli jail - os info
+         if sys.argv[1] == '-i':
+            welcome()
+            sys.exit(0)
+
+         jadmCommand = ' '.join(sys.argv[2:])
+   else:
+      jadmCommand = ' '.join(sys.argv[1:])
+
+# cli command
+   lcmd().onecmd(jadmCommand)
 
 ########################################################################################
 # Start Jadm script
@@ -412,7 +562,7 @@ def cli():
 
 if len(sys.argv) > 1:
 # use cli interface
-   cli(sys.argv)
+   cli()
 else:
 # main menu shell
    lcmd().cmdloop()
