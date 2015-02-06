@@ -149,9 +149,11 @@ def load_jail_config(conf_f):
 # check active/dying jails
    caj = subprocess.check_output("jls -h jid", shell=True).strip('jid')
    caj = caj.split('\n')
+   caj = cleanlist(caj)
 # check for 'dying' jails
    caj_dying = subprocess.check_output("jls -d -h jid", shell=True).strip('jid')
    caj_dying = caj_dying.split('\n')
+   caj_dying = cleanlist(caj_dying)
 
 # Jails Configuration in dict format.
    jails = []
@@ -194,8 +196,6 @@ def load_jail_config(conf_f):
 # is this a vnet jail ?
          if x[0] == 'vnet':
             jail_dict['vnet'] = 1
-         elif x[0] == 'ip4.addr':
-            jail_dict['vnet'] = 0
 
 # do we have a bridge interface?
          if x[0] == '$bridge':
@@ -234,7 +234,7 @@ def load_jail_config(conf_f):
        else:
            global_settings.append(i.strip(';').replace(' ', ''))
 # remove all empty elements from list
-   global_settings = [x for x in global_settings if x]
+   global_settings = cleanlist(global_settings)
 
 # return a list with all jails from jail.conf and list with all global settings
    return (jails, global_settings)
@@ -296,24 +296,21 @@ def jail_table(mcmd):
 
    if len(mcmd) == 3:
        for i in jails:
-           if mcmd[1] not in i.keys():
-               pass
-           elif mcmd[2] in i[mcmd[1]]:
-               jails_configs.append(i)
 # list olny jails with quota / usage >= from user search
-           if i['zfs'] != 0:
-              if mcmd[2][-1] not in ('K', 'M', 'G', 'T', 'P', 'E'):
-                  return False
-
+          if i['zfs'] != 0:
               if mcmd[1] == 'quota':
-                  jquota = float(i['zfs'][-2][:-1])
-                  jquota = bytesto(jquota, i['zfs'][-2][-1])
+                  if mcmd[2][-1] not in ('K', 'M', 'G', 'T', 'P', 'E'):
+                     return False
+                  jquota = float(i['zfs'][5][:-1])
+                  jquota = bytesto(jquota, i['zfs'][5][-1])
                   search_quota = float(mcmd[2][:-1])
                   search_quota = bytesto(search_quota, mcmd[2][-1])
                   if int(jquota) >= int(search_quota):
                     jails_configs.append(i)
 
               elif mcmd[1] == 'used':
+                  if mcmd[2][-1] not in ('K', 'M', 'G', 'T', 'P', 'E'):
+                     return False
                   jused = float(i['zfs'][1][:-1])
                   jused = bytesto(jused, i['zfs'][1][-1])
                   search_used = float(mcmd[2][:-1])
@@ -321,7 +318,12 @@ def jail_table(mcmd):
                   if int(jused) >= int(search_used):
                      jails_configs.append(i)
 
-           jails = jails_configs
+          if mcmd[1] not in i.keys():
+              pass
+          elif mcmd[2] in i[mcmd[1]]:
+              jails_configs.append(i)
+
+          jails = jails_configs
 
    if len(mcmd) == 2:
        for i in jails:
@@ -351,10 +353,13 @@ def jail_table(mcmd):
                if 'SKEL' not in i.keys():
                   jails_configs.append(i)
            elif mcmd[1] == 'vnet':
-               if i['vnet'] == 1:
+               if 'vnet' in i.keys():
                   jails_configs.append(i)
            elif mcmd[1] == 'novnet':
-               if i['vnet'] == 0:
+               if 'vnet' not in i.keys():
+                  jails_configs.append(i)
+           elif mcmd[1] == 'empty':
+               if '' in i.values():
                   jails_configs.append(i)
            jails = jails_configs
 
@@ -368,7 +373,7 @@ def jail_table(mcmd):
        jail_temp_list.append('')
        if 'SKEL' in i.keys():
            jail_temp_list[0] =  jail_temp_list[0] + 'S'
-       if i['vnet'] == 1:
+       if 'vnet' in i.keys():
            jail_temp_list[0] =  jail_temp_list[0] + 'V'
        jail_temp_list.append(i['active'])
        jail_temp_list.append(i['jid'])
@@ -420,6 +425,15 @@ def bytesto(bytes, to, bsize=1024):
 
    return(r)
 
+def cleanlist(list):
+   """
+########################################################################################
+# remove all empty '' elements from list
+#
+   """
+   list = [x for x in list if x]
+   return list
+
 ########################################################################################
 # MAIN MENU
 ########################################################################################
@@ -454,6 +468,7 @@ class lcmd(cmd.Cmd):
       - only actvie jails (usage: list active)
       - only inactive jails (usage: list inactive)
       - only dying jails (usage: list dying)
+      - no fully configured jails (usage: list empty)
       - by name (usage: list 'name/jid' )
       - by hostname (usage: list hostname 'jail hostname' )
       - by path (usage: lisy path '/jail/home/path' )
