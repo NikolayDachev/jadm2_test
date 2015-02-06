@@ -451,7 +451,7 @@ class lcmd(cmd.Cmd):
    listcmd = ['list', 'hostname',  'ip',  'gw',
               'active',  'inactive', 'dying',
               'vnet', 'novnet', 'zfs', 'nozfs',
-              'skel', 'noskel', 'quota', 'used']
+              'skel', 'noskel', 'quota', 'used', 'empty']
    mserver = ['server',  'client']
 
    def do_list(self, arg):
