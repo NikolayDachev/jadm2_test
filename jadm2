@@ -155,6 +155,17 @@ def load_jail_config(conf_f):
    caj_dying = caj_dying.split('\n')
    caj_dying = cleanlist(caj_dying)
 
+# find all jail.conf global settings (ignore # comments)
+# search jail.conf from 0 line to first jail{} line
+   global_settings = []
+   for i in not_sorted_mas[0:mas.index(jsname[0][0])]:
+       if '#' in i:
+           pass
+       else:
+           global_settings.append(i.strip(';').replace(' ', ''))
+# remove all empty elements from list
+   global_settings = cleanlist(global_settings)
+
 # Jails Configuration in dict format.
    jails = []
 
@@ -213,9 +224,6 @@ def load_jail_config(conf_f):
             if '/rwdata/etc/fstab' in x[1]:
                jail_dict['SKEL'] = 1
 
-# end add this jail and go with the next one
-      jails.append(jail_dict)
-
 # check if jail is active/inactive or dying
       if jail_dict['jid'] in caj:
          act = 1
@@ -225,16 +233,19 @@ def load_jail_config(conf_f):
             act = 'dying'
       jail_dict['active'] = act
 
-# find all jail.conf global settings (ignore # comments)
-# search jail.conf from 0 line to first jail{} line
-   global_settings = []
-   for i in not_sorted_mas[0:mas.index(jsname[0][0])]:
-       if '#' in i:
-           pass
-       else:
-           global_settings.append(i.strip(';').replace(' ', ''))
-# remove all empty elements from list
-   global_settings = cleanlist(global_settings)
+# try to find jail path if we use global path with $name (jail name)
+      if jail_dict['path'] == '':
+         for gs in global_settings:
+            gs = gs.split('=')
+            if gs[0] == 'path':
+                if '$name' in gs[1]:
+                    fixpath = gs[1][1:-6]
+                    jail_dict['path'] = '%s%s' % (fixpath, jail_dict['name'])
+                    zfs_check = zfs(jail_dict['path'])
+                    jail_dict['zfs'] = zfs_check[2]
+
+# end add this jail and go with the next one
+      jails.append(jail_dict)
 
 # return a list with all jails from jail.conf and list with all global settings
    return (jails, global_settings)
@@ -285,7 +296,7 @@ def jail_table(mcmd):
 # show individual jail settings in table format
 #
    """
-   jails = load_jail_config(jailconf)[0]
+   jails  = load_jail_config(jailconf)[0]
 
    jails_configs = []
    if len(mcmd) > 1:
@@ -317,7 +328,7 @@ def jail_table(mcmd):
                   search_used = bytesto(search_used, mcmd[2][-1])
                   if int(jused) >= int(search_used):
                      jails_configs.append(i)
-
+# find all other jail settings
           if mcmd[1] not in i.keys():
               pass
           elif mcmd[2] in i[mcmd[1]]:
