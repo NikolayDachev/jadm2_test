@@ -192,10 +192,12 @@ def load_jail_config(conf_f):
 
 # add local settings index on firs place in list (us original jc[] )
       jlsettings_list = []
-      jlsettings_list.append(jail_local_settings_index)
 
       for x in not_sorted_mas[jail_local_settings_index : jail_dict['jend']]:
-          jlsettings_list.append(x)
+# i is line number in jail.conf
+          i = not_sorted_mas.index(x) + 2
+          x = x.strip(';').replace(' ', '')
+          jlsettings_list.append([i, x])
       jail_dict['local_settings'] = jlsettings_list
 
 # All main jail settings
@@ -530,7 +532,7 @@ def globals(action = None, setting = None):
 #
    """
    gsettings = load_jail_config(jailconf)[1]
-  
+# create globals list  
    num = 0
    gs = []
    for i in gsettings[1:]:
@@ -538,15 +540,17 @@ def globals(action = None, setting = None):
       num += 1
 
    lmen = ["GLOBALS SETTINGS"]
-
+# show globals
    if action == None:
       print tabulate(gs, lmen)
-    
+
+# add new global setting
    elif action == 'add':
        if setting != None:
           update_jail_conf(['insert_line', [gsettings[-1][0], '%s;' % setting]])
           log(0, "'%s' global setting was added!" % setting, 1)
 
+# remove existing global setting
    elif action == 'remove':
       try:
          rmset = gsettings.pop(int(setting) + 1)
@@ -554,10 +558,61 @@ def globals(action = None, setting = None):
          log(1, "'%s' glabal setting was removed!" % rmset[1])
       except:
          print tabulate(gs, lmen)
-         log(2, "'%s' is not a global setting number!" % setting)
+         log(2, "'%s' is not a global setting number!" % setting, 1)
          return False
    else:
       log(2, "Please enter 'help globals' for valid commands!")
+
+def locals(j = None, action = None, setting = None):
+   """
+########################################################################################
+#  manipulate jail global options list, remove or add new option
+#
+   """
+   gsettings = load_jail_config(jailconf)[0]
+
+# find jail by id or name
+   for i in gsettings:
+      if str(i['name']) == str(j):
+         jail = i
+      elif str(i['jid']) == str(j):
+         jail = i
+      else:
+         log(2, "'%s' was not found in jails!" % j)
+         return False
+
+# create jail locals list
+   num = 0
+   ls = []
+   for i in jail['local_settings']:
+      ls.append([num, i[1]])
+      num += 1
+
+   lmen = ["'%s' LOCALS SETTINGS" % jail['name']]
+
+# list jail local settings
+   if action == None:
+      print tabulate(ls, lmen)
+
+# add new jail local setting
+   elif action == 'add':
+       if setting != None:
+          update_jail_conf(['insert_line', [jail['local_settings'][-1][0], '%s;' % setting]])
+          log(0, "'%s' local setting was added to '%s' jail!" % (setting, jail['name']), 1)
+
+# remove existing jail local setting
+   elif action == 'remove':
+      try:
+         rmset = jail['local_settings'].pop(int(setting) + 1)
+         update_jail_conf(['rm_line', [rmset[0]]])
+         log(1, "'%s' local setting was removed from '%s' jail!" % (rmset[1], jail['name']), 1)
+      except:
+         print tabulate(ls, lmen)
+         log(2, "'%s' is not a '%s' jail local setting number!" % (setting, jail['name']))
+         return False
+   else:
+      log(2, "Please enter 'help locals' for valid commands!")
+
 
 def update_jail_conf(update):
 ########################################################################################
@@ -727,21 +782,21 @@ class lcmd(cmd.Cmd):
          return completions
 
    def do_locals(self,  arg):
-      """Globals settings
+      """Jails Locals settings
         - list of jail locals settings (usage: locals 'name/jid')
-        - remove jail local setting (usage: locals remove  'name/jid' 'setting number' )
-        - add jail local setting (usage: locals add 'name/jid' 'setting=val')
+        - remove jail local setting (usage: locals 'name/jid' remove 'setting number' )
+        - add jail local setting (usage: locals 'name/jid' add 'setting=val')
       """
 
       arg = str(arg).split(' ')
       arg = [i for i in arg if i != '']
 
-      if len(arg) = 3:
-         locals(arg[0], arg[1], arg[1])
-      elif len(arg) = 2:
-         locals(arg[0], arg[1])
+      if len(arg) == 3:
+         locals(arg[0], arg[1], arg[2])
+      elif len(arg) == 1:
+         locals(arg[0])
       else:
-         print "error"
+         log(2, "Please enter 'help locals' for valid commands!")
 
    def complete_locals(self, text, line, begidx, endidx):
       if not text:
