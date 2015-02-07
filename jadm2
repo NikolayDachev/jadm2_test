@@ -60,16 +60,11 @@ jailconf = '/etc/jail.conf'
 # jadm log file
 logfile = '/var/log/jadm.log'
 
-# empty vars
-bridge_int = ''
-jzfs = ''
-jpath = ''
-
 # jadm don't show verbose output by defult
 verbose = 0
 
 # settings start index in jail.conf
-_Lsettings = '#local_settings@'
+_Lsettings = '#@#localsettings#@#'
 
 # jadm server
 LHOST = '0.0.0.0'
@@ -81,7 +76,7 @@ newmac = "$newmac = \"dd if=/dev/urandom bs=1024 count=1 2>/dev/null|md5|sed 's/
 
 # vnet
 vnet = [
-'#network_settings@',
+'### network settings ###',
 'vnet;',
 'vnet.interface = "epair${jid}b";',
 newmac,
@@ -102,7 +97,7 @@ newmac,
 
 # no vnet
 net = [
-'#network_settings@',
+'### network settings ###',
 'ip4.addr = "$jip";',
 'exec.start = "/bin/sh /etc/rc";',
 'exec.stop = "/bin/sh /etc/rc.shutdown";',
