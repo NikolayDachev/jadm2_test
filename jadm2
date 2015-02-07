@@ -547,7 +547,7 @@ def globals(action = None, setting = None):
           update_jail_conf(['insert_line', [gsettings[-1][0], '%s;' % setting]])
           log(0, "'%s' global setting was added!" % setting, 1)
 
-   elif action == 'rm':
+   elif action == 'remove':
       try:
          rmset = gsettings.pop(int(setting) + 1)
          update_jail_conf(['rm_line', [rmset[0]]])
@@ -617,7 +617,7 @@ class lcmd(cmd.Cmd):
    """
    prompt = 'jadm:> '
 
-   local_global = ['list',  'remove',  'add']
+   local_global = ['remove',  'add']
    snap = ['list', 'create',  'remove',  'restore']
    listcmd = ['list', 'hostname',  'ip',  'gw',
               'active',  'inactive', 'dying',
@@ -705,9 +705,9 @@ class lcmd(cmd.Cmd):
       gateways(gwtable = 1)
       
    def do_globals(self,  arg):
-      """Global setting
-        - list of global setting (usage: global)
-        - remove global setting (usage: global rm 'setting number' )
+      """Globals settings
+        - list of globals settings (usage: global)
+        - remove global setting (usage: global remove 'setting number' )
         - add global setting (usage: global add 'setting=val')
       """
 
@@ -718,6 +718,37 @@ class lcmd(cmd.Cmd):
          globals(arg[0], arg[1])
       else:
          globals()
+
+   def complete_globals(self, text, line, begidx, endidx):
+      if not text:
+         completions = self.local_global[:]
+      else:
+         completions = [ f for f in self.local_global if f.startswith(text)]
+         return completions
+
+   def do_locals(self,  arg):
+      """Globals settings
+        - list of jail locals settings (usage: locals 'name/jid')
+        - remove jail local setting (usage: locals remove  'name/jid' 'setting number' )
+        - add jail local setting (usage: locals add 'name/jid' 'setting=val')
+      """
+
+      arg = str(arg).split(' ')
+      arg = [i for i in arg if i != '']
+
+      if len(arg) = 3:
+         locals(arg[0], arg[1], arg[1])
+      elif len(arg) = 2:
+         locals(arg[0], arg[1])
+      else:
+         print "error"
+
+   def complete_locals(self, text, line, begidx, endidx):
+      if not text:
+         completions = self.local_global[:]
+      else:
+         completions = [ f for f in self.local_global if f.startswith(text)]
+         return completions
 
 def cli():
    """
