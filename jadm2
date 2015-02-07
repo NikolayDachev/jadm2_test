@@ -440,6 +440,75 @@ def cleanlist(list):
    list = [x for x in list if x]
    return list
 
+def ch_ipv4(sp):
+    """
+########################################################################################
+# This function check if ip address fromat sp var is correct
+# numbers of octet should be 4, each octet separated by '.' should be less than 256
+#
+    """
+    octet = sp.split('.')
+    if len(octet) != 4:
+       return False
+    try:
+       return all(0<=int(p)<256 for p in octet)
+    except ValueError:
+       return False
+
+def bridge(gwc = 0, brc = bridge_int,  iscli = 0):
+   """
+########################################################################################
+# find and display in table format existing bridge interfacess in system
+#
+   """
+
+# find all bridegX interfaces
+   netifaces.interfaces()
+
+# fill all lists for bridge
+   for i in netifaces.ifaddresses(bridge_int)[netifaces.AF_INET]:
+      br_interface.append([gw_number, ' ', i['addr'], i['netmask']])
+      gw_ipaddr.append(i['addr'])
+      gw_network.append(i['netmask'])
+      gw_number = gw_number + 1
+   br_interface[0][1] = bridge_int
+
+   if gwc == 'check':
+       return (br_interface, gw_ipaddr, gw_network)
+
+   if iscli == 0:
+# print jadm gateways  table
+      br_menu = ["Number", "Bridge name", "Gateway IP Address", "Gatewy Network Mask"]
+      print tabulate(br_interface, br_menu)
+   else:
+       pass
+
+# return bridge interface name, ip addresses and network mask
+   return (br_interface, gw_ipaddr, gw_network)
+
+def bridge_network_check(ip, bridge_ip, bridge_netmask):
+   """
+########################################################################################
+# check if ipaddress is in selected bridge network
+#
+   """
+# convert vars to unicode
+   ip = unicode(ip)
+   bridge_ip = unicode(bridge_ip)
+   bridge_netmask = unicode(bridge_netmask)
+# by default ip is not in bridge network
+   brctl = 0
+
+# bridge insterface ip network
+   brdige_network = IPv4Interface('%s/%s' % (bridge_ip, bridge_netmask)).network
+
+# check if ip is from bridge network and return bridge control var (brctl) = true
+   if IPv4Address(ip) in list(IPv4Network(brdige_network)):
+      brctl = 1
+
+# return brctl and bridge ip network
+   return brctl, brdige_network
+
 ########################################################################################
 # MAIN MENU
 ########################################################################################
@@ -580,6 +649,8 @@ def cli():
 ########################################################################################
 # Start Jadm script
 ########################################################################################
+
+print netifaces.interfaces()
 
 if len(sys.argv) > 1:
 # use cli interface
