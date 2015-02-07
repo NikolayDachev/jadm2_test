@@ -37,8 +37,8 @@ OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITU
 from datetime import datetime
 from tabulate import tabulate
 from ipaddress import *
-import os
 import sys
+import logging
 import subprocess
 import netifaces
 import cmd
@@ -152,7 +152,7 @@ def load_jail_config(conf_f):
 
 # find all jail.conf global settings (ignore # comments)
 # search jail.conf from 0 line to first jail{} line
-   global_settings = []
+   global_settings = [mas.index(jsname[0][0])]
    for i in not_sorted_mas[0:mas.index(jsname[0][0])]:
        if '#' in i:
            pass
@@ -517,7 +517,62 @@ def bridge_network_check(ip, bridge_ip, bridge_netmask):
       brctl = 1
 
 # return brctl and bridge ip network
-   return brctl, brdige_network
+   return brctl
+
+def globals(action = None, setting = None):
+   """
+########################################################################################
+#  manipulate jail global options list, remove or add new option
+#
+   """
+   gsettings = load_jail_config(jailconf)[1]
+
+   number = 0
+   gs = []
+   for i in gsettings[1:]:
+      gs.append([number, i])
+      number += 1
+
+   if action == None:
+      lmen = [" ", "GLOBALS SETTINGS"] 
+      print tabulate(gs, lmen)
+ 
+   elif action == 'add':
+       if setting != None:
+          gsettings.append('%s;' % setting)
+          log(1, "'%s' global setting was added!" % setting, 1)
+
+   elif action == 'rm':
+      if setting == None:
+         lmen = [" ", "GLOBALS SETTINGS"]
+         print tabulate(gs, lmen)
+         log(2, "'%s' is not setting number!" % setting)
+         return False
+   else:
+      log(2, "Please enter 'help globals' for valid commands!")
+
+def log(ltype, msg, logit = None):
+   """
+########################################################################################
+# print msg and log it if is needed
+# log([0 - INFO, 1 = WARRNING and 2 - ERROR], 'log message', 'eny value if you want
+#      to log in jailog file'
+#
+   """
+
+   logtype = ['INFO', 'WARNING', 'ERROR']
+   logmessage = "%s: %s" % (logtype[ltype], msg)
+
+   if logit != None:
+      logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', level=logging.DEBUG, filename=logfile)
+      if ltype == 0:
+         logging.info('   %s' % msg)
+      if ltype == 1:
+         logging.warning(msg)
+      if ltype == 2:
+         logging.error('  %s' % msg)
+
+   print "	%s" % logmessage
 
 ########################################################################################
 # MAIN MENU
@@ -613,11 +668,25 @@ class lcmd(cmd.Cmd):
 
    def do_gateways(self,  arg):
       """ Show system 'bridgeX' interfaces 
-          used for jail gateways and OS default gateway 
+          used for jail gateways and OS (system) default gateway 
       """
 
       gateways(gwtable = 1)
       
+   def do_globals(self,  arg):
+      """Global setting
+        - list of global setting (usage: global)
+        - remove global setting (usage: global rm 'setting number' )
+        - add global setting (usage: global add 'setting=val')
+      """
+
+      arg = str(arg).split(' ')
+      arg = [i for i in arg if i != '']
+ 
+      if len(arg) > 1:     
+         globals(arg[0], arg[1])
+      else:
+         globals()
 
 def cli():
    """
