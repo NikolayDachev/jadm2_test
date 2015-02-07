@@ -455,36 +455,46 @@ def ch_ipv4(sp):
     except ValueError:
        return False
 
-def bridge(gwc = 0, brc = bridge_int,  iscli = 0):
+def gateways(gwtable = None):
    """
 ########################################################################################
 # find and display in table format existing bridge interfacess in system
 #
    """
 
+   bridges = []
+   bridge_dict = {'name':'', 'addr':''}
 # find all bridegX interfaces
-   netifaces.interfaces()
-
+   for i in netifaces.interfaces():
+      if 'bridge' in i:
 # fill all lists for bridge
-   for i in netifaces.ifaddresses(bridge_int)[netifaces.AF_INET]:
-      br_interface.append([gw_number, ' ', i['addr'], i['netmask']])
-      gw_ipaddr.append(i['addr'])
-      gw_network.append(i['netmask'])
-      gw_number = gw_number + 1
-   br_interface[0][1] = bridge_int
+         bridge_dict['addr'] = netifaces.ifaddresses(i)[netifaces.AF_INET]
+         for x in bridge_dict['addr']:
+            bridges.append({'name':i, 'addr':x})
 
-   if gwc == 'check':
-       return (br_interface, gw_ipaddr, gw_network)
+# append os system default gateway
+   system = subprocess.check_output('route get default', shell=True)
+   system = system.split('\n')
+   for i in system:
+      i = i.split(':')
+      if 'gateway' in i[0]:
+         bridges.append({'name':'system', 'addr':{'addr':i[1].replace(' ', ''), 'broadcast':'', 'netmask':'' }})
 
-   if iscli == 0:
-# print jadm gateways  table
-      br_menu = ["Number", "Bridge name", "Gateway IP Address", "Gatewy Network Mask"]
-      print tabulate(br_interface, br_menu)
-   else:
-       pass
+# make final list TO BE FIXED
+   gwlist = []
+   gwname = 'n/a'
+   for i in  bridges:
+      if i['name'] == gwname:
+          i['name'] = ' '
+      gwlist.append([i['name'], i['addr']['addr'], i['addr']['netmask'], i['addr']['broadcast']])
+
+# show gateway table
+   if gwtable != None:
+      lmen = ['INTERFACE', 'ADDRESS', 'NETWORKMASK', 'BROADCAST']
+      print tabulate(gwlist, lmen)      
 
 # return bridge interface name, ip addresses and network mask
-   return (br_interface, gw_ipaddr, gw_network)
+   return (bridges)
 
 def bridge_network_check(ip, bridge_ip, bridge_netmask):
    """
@@ -601,6 +611,14 @@ class lcmd(cmd.Cmd):
          completions = [ f for f in self.listcmd if f.startswith(text)]
          return completions
 
+   def do_gateways(self,  arg):
+      """ Show system 'bridgeX' interfaces 
+          used for jail gateways and OS default gateway 
+      """
+
+      gateways(gwtable = 1)
+      
+
 def cli():
    """
 ########################################################################################
@@ -649,8 +667,6 @@ def cli():
 ########################################################################################
 # Start Jadm script
 ########################################################################################
-
-print netifaces.interfaces()
 
 if len(sys.argv) > 1:
 # use cli interface
