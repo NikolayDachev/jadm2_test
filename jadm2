@@ -159,7 +159,7 @@ def load_jail_config(conf_f):
            pass
        else:
 # global seting line number
-           x = not_sorted_mas.index(i)
+           x = not_sorted_mas.index(i) + 1
 # glabal setting table format
            i = i.strip(';').replace(' ', '')
            if i:
@@ -544,13 +544,13 @@ def globals(action = None, setting = None):
     
    elif action == 'add':
        if setting != None:
-          update_jail_conf({'insert_line':[[gsettings[-1][0], '%s;' % setting]]})
+          update_jail_conf(['insert_line', [gsettings[-1][0], '%s;' % setting]])
           log(0, "'%s' global setting was added!" % setting, 1)
 
    elif action == 'rm':
       try:
          rmset = gsettings.pop(int(setting) + 1)
-         update_jail_conf({'rm_line':[rmset[0]]})
+         update_jail_conf(['rm_line', [rmset[0]]])
          log(1, "'%s' glabal setting was removed!" % rmset[1])
       except:
          print tabulate(gs, lmen)
@@ -565,19 +565,21 @@ def update_jail_conf(update):
 #
 
 # open jail.conf
-   jc = open(jailconf, 'rw')
+   jc = open(jailconf, 'r')
    jcl = []
    for i in jc:
       i = i.strip('\n')
       jcl.append(i)
+   jc.close()
 
-   if update['insert_line']:
-      jcl.insert(update['insert_line'][0], update['insert_line'][1])
+   if update[0] == 'insert_line':
+      jcl.insert(update[1][0], update[1][1])
 
-   if update['rm_line']:
-      del jcl[update['insert_line'][0]]
+   if update[0] == 'rm_line':
+      del jcl[update[1][0]]
 
 # close jail.conf
+   jc = open(jailconf, 'w')
    jc.write('\n'.join(jcl))
    jc.close()
 
