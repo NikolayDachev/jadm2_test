@@ -273,8 +273,12 @@ def zfs(zvalue = None):
    zfs_mountp = subprocess.check_output("zfs list -H -o mountpoint", shell=True)
    zfs_mountp = zfs_mountp.split('\n')
 
-# check if zvalue is in zfs(path or mountpoint)
+# default is False
    iszfs = 0
+# cehck if iszfs exist
+   if zvalue in zfs_name:
+      return (zfs_name, zfs_mountp, 1)
+# check if zvalue is in zfs(path or mountpoint)
    if zvalue in zfs_mountp:
 # get zfs - NAME USED  AVAIL  REFER  MOUNTPOINT
       iszfs = subprocess.check_output("zfs list -H %s" % zvalue, shell=True)
@@ -689,7 +693,8 @@ def jail_input(modify = None):
 #
    """
 
-   jails = jails = load_jail_config(jailconf)[0]
+   load_jails = load_jail_config(jailconf)
+   jails, gsettings = load_jails[0], load_jails[1]
 
    if modify == None:
       prompt = ':> '
@@ -698,7 +703,7 @@ def jail_input(modify = None):
       acText = 'Modify'
 
    new_jail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
-               '$jgw':'','path':'', 'zfs':0}
+               '$jgw':'','path':'', 'zfs':0, }
 
    input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path', 'src']
 
@@ -746,45 +751,66 @@ def jail_input(modify = None):
                     if find_gw == False:
                        continue
                     else:
-                       new_jail['$jgw'] = find_gw[0],
-                       new_jail[ '$bridge'] = find_gw[1],
-                       new_jail[ 'gwnetmask']= find_gw[2],
+                       new_jail['$jgw'] = find_gw[0]
+                       new_jail['$bridge'] = find_gw[1]
+                       new_jail['gwnetmask']= find_gw[2]
                        new_jail['vnet'] = 1
                        break
                  break
               else:
                  new_jail['vnet'] = 0
                  new_jail['$jgw'] = 'system'
+                 new_jail['gwnetmask'] = ''
                  break
-# check if ip address already in use or is not a part from selected GW:
+# enter ip address already 
            if ikey == 'ip':
-              if ch_ipv4(ekey) != False:
-                 if new_jail['$jgw'] != 'system':
-                    if bridge_network_check(ekey, new_jail['$jgw'], new_jail[ 'gwnetmask']) != False:
-                       new_jail['$jip'] = ekey
-                    else:
-                       log(2, "'%s' is not a part from %s/%s network!" % (ekey, new_jail['$jgw'], new_jail[ 'gwnetmask']))
-                       continue
-
-                 for j in jails:
-                    if new_jail['$jip'] == j['$jip'][:-3]:
-                       log(2, "'%s' ip address is used by '%s' jail!" % (ekey, j['name']))
-                       continue
-
+              if check_jail_Setting(ikey, [ekey, new_jail]) == False:
+                 continue
+              else:
+                 new_jail['$jip'] = ekey
                  break
-              log(2, "'%s' is not a valid ip address!" % (ekey))
-              continue
-
+# create zfs if is needed
            if ikey == 'zfs':
+              if 'y' in ekey:
+                 while True:
+                    ezfs = raw_input("enter zfs root %s" % prompt)
+# try to use global setting path as zfs:
+                    if ezfs == '':
+                       for x in gsettings:
+                          if 'path' in x[1]:
+                             if '$name' in x[1]:
+                                y = x[1].split('=')
+                                ezfs = y[1][2:-7]
+                                log(0, "global path found - '%s' will be used!" % ezfs)
+                    if ezfs == '':
+                       break
+                    ezfs_check = check_jail_Setting(ikey, ezfs)
+                    if ezfs_check == False:
+                       continue
+                    else:
+                       new_jail['zfs'] = ['%s/%s' % (ezfs, new_jail['name'])]
+                       break
               break
+# use zfs quota
+           if  new_jail['zfs'] != 0:
+              while True:
+                 zquota = raw_input("enter zfs quota %s" % prompt)
+                 if  zquota in ['\n', '', ' ', '	']:
+                     new_jail['zfs'].append('none')
+                     break
+                 if  check_jail_Setting('zquota', zquota) == False:
+                    continue 
+                 else:
+                    new_jail['zfs'].append(zquota)
+# enter jail path
            if ikey == 'path':
               break
+# choose install source
            if ikey == 'src':
               break
 
    print new_jail
-   print jails[2]
-
+   print jails
 
 def check_jail_Setting(setting, val):
    """
@@ -793,8 +819,8 @@ def check_jail_Setting(setting, val):
 #
    """
 
-   jails = jails = load_jail_config(jailconf)[0]
-   input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path', 'src']
+   load_jails = load_jail_config(jailconf)
+   jails, gsettings = load_jails[0], load_jails[1]
 
 # check if we can use name = val
    if setting == 'name':
@@ -839,10 +865,52 @@ def check_jail_Setting(setting, val):
        for j in val[1]:
           gaddr = j['addr']
           if val[0] == gaddr['addr']:
-              return (gaddr['addr'], j['name'], gaddr['netmask'] )
+              return (gaddr['addr'], j['name'], gaddr['netmask'])
        log(2, "'%s' is not a valid gateway ip address!" % (val[0]))
        return False
 
+# check if tshi ip is aveilable
+# val[0] - ip, vla[1] new_jail{}
+   if setting == 'ip':
+      if ch_ipv4(val[0]) == False:
+            log(2, "'%s' is not a valid ip address!" % (val[0]))
+            return False
+      if val[1]['$jgw'] != 'system':
+         if bridge_network_check(val[0], val[1]['$jgw'], val[1]['gwnetmask']) == False:
+            log(2, "'%s' is not a part from %s/%s network!" % (val[0], val[1]['$jgw'], val[1][ 'gwnetmask']))
+            return False
+         for j in jails:
+            if val[1]['$jip'] == j['$jip'][:-3]:
+               log(2, "'%s' ip address is used by '%s' jail!" % (val[0], j['name']))
+               return False
+# check jail zfs root -----------------
+   if setting == 'zfs':
+# get/create zfs 
+      if zfs(val)[2] != 1:
+         log(2, "'%s' zfs root not exist!" % val)
+         zfs_y = raw_input('create it now (y)?> ')
+         if 'y' in zfs_y:
+            try:
+               subprocess.check_call('zfs create %s' % val, shell=True)
+               subprocess.check_call('zfs set mountpoint=none  %s' % val, shell=True)
+               log(0, "jail zfs root '%s' was created!" % val, 1)
+               return val
+            except subprocess.CalledProcessError:
+               log(2, "'%s' cannot be created!" % val, 1)
+               return False
+         else:
+            return False
+# checl zfs quota
+   if setting == 'zquota':
+      if val[-1] in ('K', 'M', 'G', 'T', 'P', 'E'):
+         try:
+            int(zquota[:-1])
+            return True
+         except:
+            pass
+      else:
+         log(2, "'%s' is not correct zfs quota format!  xxx('K', 'M', 'G', 'T', 'P', 'E') " % val)
+         return False
 
 ########################################################################################
 # MAIN MENU
