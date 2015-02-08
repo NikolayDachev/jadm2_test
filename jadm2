@@ -159,7 +159,7 @@ def load_jail_config(conf_f):
            pass
        else:
 # global seting line number
-           x = not_sorted_mas.index(i) + 1
+           x = not_sorted_mas.index(i)
 # glabal setting table format
            i = i.strip(';').replace(' ', '')
            if i:
@@ -192,10 +192,10 @@ def load_jail_config(conf_f):
 
 # add local settings index on firs place in list (us original jc[] )
       jlsettings_list = []
-
-      for x in not_sorted_mas[jail_local_settings_index : jail_dict['jend']]:
+      i = jail_local_settings_index      
+      for x in not_sorted_mas[i : jail_dict['jend']]:
 # i is line number in jail.conf
-          i = not_sorted_mas.index(x) + 2
+          i += 1
           x = x.strip(';').replace(' ', '')
           jlsettings_list.append([i, x])
       jail_dict['local_settings'] = jlsettings_list
@@ -535,7 +535,7 @@ def globals(action = None, setting = None):
 # create globals list  
    num = 0
    gs = []
-   for i in gsettings[1:]:
+   for i in gsettings:
       gs.append([num, i[1]])
       num += 1
 
@@ -547,13 +547,13 @@ def globals(action = None, setting = None):
 # add new global setting
    elif action == 'add':
        if setting != None:
-          update_jail_conf(['insert_line', [gsettings[-1][0], '%s;' % setting]])
+          update_jail_conf(['insert_line', [gsettings[-1][0] + 1, '%s;' % setting]])
           log(0, "'%s' global setting was added!" % setting, 1)
 
 # remove existing global setting
    elif action == 'remove':
       try:
-         rmset = gsettings.pop(int(setting) + 1)
+         rmset = gsettings.pop(int(setting))
          update_jail_conf(['rm_line', [rmset[0]]])
          log(1, "'%s' glabal setting was removed!" % rmset[1])
       except:
@@ -566,7 +566,7 @@ def globals(action = None, setting = None):
 def locals(j = None, action = None, setting = None):
    """
 ########################################################################################
-#  manipulate jail global options list, remove or add new option
+#  manipulate jail locals options list, remove or add new option
 #
    """
    gsettings = load_jail_config(jailconf)[0]
@@ -597,13 +597,14 @@ def locals(j = None, action = None, setting = None):
 # add new jail local setting
    elif action == 'add':
        if setting != None:
+          print jail['local_settings']
           update_jail_conf(['insert_line', [jail['local_settings'][-1][0], '%s;' % setting]])
           log(0, "'%s' local setting was added to '%s' jail!" % (setting, jail['name']), 1)
 
 # remove existing jail local setting
    elif action == 'remove':
       try:
-         rmset = jail['local_settings'].pop(int(setting) + 1)
+         rmset = jail['local_settings'].pop(int(setting))
          update_jail_conf(['rm_line', [rmset[0]]])
          log(1, "'%s' local setting was removed from '%s' jail!" % (rmset[1], jail['name']), 1)
       except:
@@ -616,7 +617,7 @@ def locals(j = None, action = None, setting = None):
 
 def update_jail_conf(update):
 ########################################################################################
-# update or change jail.conf
+# update jail.conf
 #
 
 # open jail.conf
