@@ -154,6 +154,7 @@ def load_jail_config(conf_f):
 # search jail.conf from 0 line to first jail{} line
    global_settings = []
    gs_only = not_sorted_mas[0:mas.index(jsname[0][0])]
+
    for i in gs_only:
        if '#' in i:
            pass
@@ -192,12 +193,14 @@ def load_jail_config(conf_f):
 
 # add local settings index on firs place in list (us original jc[] )
       jlsettings_list = []
-      i = jail_local_settings_index      
-      for x in not_sorted_mas[i : jail_dict['jend']]:
+      i = jail_local_settings_index
+      if i != 0:
+         for x in not_sorted_mas[i : jail_dict['jend']]:
 # i is line number in jail.conf
-          i += 1
-          x = x.strip(';').replace(' ', '')
-          jlsettings_list.append([i, x])
+             i += 1
+             x = x.strip(';').replace(' ', '')
+             jlsettings_list.append([i, x])
+
       jail_dict['local_settings'] = jlsettings_list
 
 # All main jail settings
@@ -236,14 +239,14 @@ def load_jail_config(conf_f):
 
 # try to find jail path if we use global path with $name (jail name)
       if jail_dict['path'] == '':
-         for gs in global_settings:
-            gs = gs.split('=')
-            if gs[0] == 'path':
-                if '$name' in gs[1]:
-                    fixpath = gs[1][1:-6]
-                    jail_dict['path'] = '%s%s' % (fixpath, jail_dict['name'])
-                    zfs_check = zfs(jail_dict['path'])
-                    jail_dict['zfs'] = zfs_check[2]
+         for x in global_settings:
+               if 'path' in x[1]:
+                  if '$name' in x[1]:
+                     y = x[1].split('=')
+                     fixpath = y[1][1:-6]
+                     jail_dict['path'] = '%s%s' % (fixpath, jail_dict['name'])
+                     zfs_check = zfs(jail_dict['path'])
+                     jail_dict['zfs'] = zfs_check[2]
 
 # end add this jail and go with the next one
       jails.append(jail_dict)
@@ -531,7 +534,8 @@ def globals(action = None, setting = None):
 #  manipulate jail global options list, remove or add new option
 #
    """
-   gsettings = load_jail_config(jailconf)[1]
+   jail_config = load_jail_config(jailconf)
+   jails, gsettings = jail_config[0], jail_config[1]
 # create globals list  
    num = 0
    gs = []
@@ -547,7 +551,11 @@ def globals(action = None, setting = None):
 # add new global setting
    elif action == 'add':
        if setting != None:
-          update_jail_conf(['insert_line', [gsettings[-1][0] + 1, '%s;' % setting]])
+          if gsettings == []:
+              gs_position = 0
+          else:
+              gs_position = gsettings[-1][0]
+          update_jail_conf(['insert_line', [gs_position, '%s;' % setting]])
           log(0, "'%s' global setting was added!" % setting, 1)
 
 # remove existing global setting
@@ -569,7 +577,7 @@ def locals(j = None, action = None, setting = None):
 #  manipulate jail locals options list, remove or add new option
 #
    """
-   gsettings = load_jail_config(jailconf)[0]
+   jails = load_jail_config(jailconf)[0]
 
 # find jail by id or name
    for i in gsettings:
