@@ -196,10 +196,14 @@ def load_jail_config(conf_f):
       i = jail_local_settings_index
       if i != 0:
          for x in not_sorted_mas[i : jail_dict['jend']]:
+            i += 1
+            if '#' in x:
+               pass
+            else:
 # i is line number in jail.conf
-             i += 1
-             x = x.strip(';').replace(' ', '')
-             jlsettings_list.append([i, x])
+               x = x.strip(';').replace(' ', '')
+               if x:
+                  jlsettings_list.append([i, x])
 
       jail_dict['local_settings'] = jlsettings_list
 
@@ -580,14 +584,17 @@ def locals(j = None, action = None, setting = None):
    jails = load_jail_config(jailconf)[0]
 
 # find jail by id or name
-   for i in gsettings:
+   jail = None
+   for i in jails:
       if str(i['name']) == str(j):
          jail = i
-      elif str(i['jid']) == str(j):
+         break
+      if str(i['jid']) == str(j):
          jail = i
-      else:
-         log(2, "'%s' was not found in jails!" % j)
-         return False
+         break
+   if jail == None:
+      log(2, "'%s' was not found in jails!" % j)
+      return False
 
 # create jail locals list
    num = 0
@@ -600,12 +607,14 @@ def locals(j = None, action = None, setting = None):
 
 # list jail local settings
    if action == None:
-      print tabulate(ls, lmen)
+      if ls == []:
+        log(0, "'%s' jail doesn't have locals settings!" % (jail['name']))
+      else:
+         print tabulate(ls, lmen)
 
 # add new jail local setting
    elif action == 'add':
        if setting != None:
-          print jail['local_settings']
           update_jail_conf(['insert_line', [jail['local_settings'][-1][0], '%s;' % setting]])
           log(0, "'%s' local setting was added to '%s' jail!" % (setting, jail['name']), 1)
 
@@ -613,7 +622,7 @@ def locals(j = None, action = None, setting = None):
    elif action == 'remove':
       try:
          rmset = jail['local_settings'].pop(int(setting))
-         update_jail_conf(['rm_line', [rmset[0]]])
+         update_jail_conf(['rm_line', [rmset[0] - 1]])
          log(1, "'%s' local setting was removed from '%s' jail!" % (rmset[1], jail['name']), 1)
       except:
          print tabulate(ls, lmen)
@@ -770,9 +779,9 @@ class lcmd(cmd.Cmd):
       
    def do_globals(self,  arg):
       """Globals settings
-        - list of globals settings (usage: global)
-        - remove global setting (usage: global remove 'setting number' )
-        - add global setting (usage: global add 'setting=val')
+        - list of globals settings (usage: globals)
+        - remove global setting (usage: globals remove 'setting number' )
+        - add global setting (usage: globals add 'setting=val')
       """
 
       arg = str(arg).split(' ')
