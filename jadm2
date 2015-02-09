@@ -615,7 +615,11 @@ def locals(j = None, action = None, setting = None):
 # add new jail local setting
    elif action == 'add':
        if setting != None:
-          update_jail_conf(['insert_line', [jail['local_settings'][-1][0], '%s;' % setting]])
+          if jail['local_settings'] == []:
+              ls_position = jail['jend']
+          else:
+              ls_position = jail['local_settings'][-1][0]
+          update_jail_conf(['insert_line', [ls_position, '%s;' % setting]])
           log(0, "'%s' local setting was added to '%s' jail!" % (setting, jail['name']), 1)
 
 # remove existing jail local setting
