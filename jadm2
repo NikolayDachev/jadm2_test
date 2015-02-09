@@ -715,43 +715,21 @@ def jail_input(modify = None):
 
 # enter jail name
            if ikey == 'name':
-              exist = []
-              for j in jails:
-                 exist.append (j['name'])
-              if ekey in exist:
-                 log(2, "Jail with %s '%s' already exist!" % (ikey, ekey))
+              if check_jail_Setting(ikey, ekey) == False:
                  continue
               else:
                  new_jail['name'] = ekey
                  break
 # enter jail id
            if ikey == 'id':
-              try:
-                  int(ekey)
-                  if ekey == '0':
-                    log(2, "'%s' is not valid jail id number!" % (ekey))
-                    continue
-              except:
-                 log(2, "'%s' is not valid jail id number!" % (ekey))
-                 continue
-
-              exist = []
-              for j in jails:
-                 exist.append (j['jid'])
-              if ekey in exist:
-                 log(2, "Jail with %s '%s' already exist!" % (ikey, ekey))
+              if check_jail_Setting(ikey, ekey) == False:
                  continue
               else:
                  new_jail['jid'] = str(ekey)
                  break
-
 # enter jail hostname
            if ikey == 'hostname':
-              exist = []
-              for j in jails:
-                 exist.append (j['host.hostname'])
-              if ekey in exist:
-                 log(2, "Jail with %s '%s' already exist!" % (ikey, ekey))
+              if check_jail_Setting(ikey, ekey) == False:
                  continue
               else:
                  new_jail['host.hostname'] = ekey
@@ -759,32 +737,20 @@ def jail_input(modify = None):
 # enter jail vnet gateway or be system
            if ikey == 'vnet':
               if 'y' in ekey:
-
                  while True:
                     print ''
                     gws = gateways('table')
                     egw = raw_input("enter jail gateway %s" % prompt)
 # check if entered gw exist
-                    if ch_ipv4(egw) != False:
-
-                       for j in gws:
-                          gname = j['name']
-                          gaddr = j['addr']
-                          if egw == gaddr['addr']:
-                              new_jail['$jgw'] = gaddr['addr']
-                              new_jail[ '$bridge'] = gname
-                              new_jail[ 'gwnetmask']= gaddr['netmask']
-                              new_jail['vnet'] = 1
-                              break
-# check if we find valid gw
-                       if new_jail['$jgw']:
-                           break
-                       else:
-                          log(2, "'%s' is not a valid gateway ip address!" % (egw))
-                          continue
-                    else:
-                       log(2, "'%s' is not a valid gateway ip address!" % (egw))
+                    find_gw = check_jail_Setting(ikey, [egw, gws])
+                    if find_gw == False:
                        continue
+                    else:
+                       new_jail['$jgw'] = find_gw[0],
+                       new_jail[ '$bridge'] = find_gw[1],
+                       new_jail[ 'gwnetmask']= find_gw[2],
+                       new_jail['vnet'] = 1
+                       break
                  break
               else:
                  new_jail['vnet'] = 0
@@ -818,6 +784,64 @@ def jail_input(modify = None):
 
    print new_jail
    print jails[2]
+
+
+def check_jail_Setting(setting, val):
+   """
+########################################################################################
+# check if we can use 'val' for jail 'settings'
+#
+   """
+
+   jails = jails = load_jail_config(jailconf)[0]
+   input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path', 'src']
+
+# check if we can use name = val
+   if setting == 'name':
+      exist = []
+      for j in jails:
+         exist.append (j['name'])
+      if val in exist:
+         log(2, "Jail with %s '%s' already exist!" % (setting, val))
+         return False
+
+# check if we can use id = val
+   if setting == 'id':
+      try:
+         int(val)
+         if val == '0':
+            log(2, "'%s' is not a valid jail id number!" % (val))
+            return False
+      except:
+         log(2, "'%s' is not a valid jail id number!" % (val))
+         return False
+      exist = []
+      for j in jails:
+         exist.append (j['jid'])
+         if val in exist:
+            log(2, "Jail with %s '%s' already exist!" % (setting, val))
+            return False
+
+# cehck if we can use hostname = val
+   if setting == 'hostname':
+       exist = []
+       for j in jails:
+          exist.append (j['host.hostname'])
+       if val in exist:
+          log(2, "Jail with %s '%s' already exist!" % (setting, val))
+          return False
+
+# cehck vnet = val and return gateway
+   if setting == 'vnet':
+       if ch_ipv4(val[0]) == False:
+          log(2, "'%s' is not a valid gateway ip address!" % (val[0]))
+          return False
+       for j in val[1]:
+          gaddr = j['addr']
+          if val[0] == gaddr['addr']:
+              return (gaddr['addr'], j['name'], gaddr['netmask'] )
+       log(2, "'%s' is not a valid gateway ip address!" % (val[0]))
+       return False
 
 
 ########################################################################################
