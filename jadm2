@@ -682,6 +682,144 @@ def log(ltype, msg, logit = None):
       if ltype == 2:
          logging.error('  %s' % msg)
 
+def jail_input(modify = None):
+   """
+########################################################################################
+# create new jail or modify existing jail (settings input)
+#
+   """
+
+   jails = jails = load_jail_config(jailconf)[0]
+
+   if modify == None:
+      prompt = ':> '
+      acText = 'Create New'
+   else:
+      acText = 'Modify'
+
+   new_jail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
+               '$jgw':'','path':'', 'zfs':0}
+
+   input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path', 'src']
+
+   print "----------------------------------------------------"
+   print "                %s Jail " % acText
+   print "----------------------------------------------------"
+
+   for ikey in input_keys:
+       while True:
+           if ikey in ['vnet', 'zfs']:
+              ekey = raw_input("is %s jail (y) %s" % (ikey, prompt))
+           else:
+              ekey = raw_input('enter jail %s %s' % (ikey, prompt))
+
+# enter jail name
+           if ikey == 'name':
+              exist = []
+              for j in jails:
+                 exist.append (j['name'])
+              if ekey in exist:
+                 log(2, "Jail with %s '%s' already exist!" % (ikey, ekey))
+                 continue
+              else:
+                 new_jail['name'] = ekey
+                 break
+# enter jail id
+           if ikey == 'id':
+              try:
+                  int(ekey)
+                  if ekey == '0':
+                    log(2, "'%s' is not valid jail id number!" % (ekey))
+                    continue
+              except:
+                 log(2, "'%s' is not valid jail id number!" % (ekey))
+                 continue
+
+              exist = []
+              for j in jails:
+                 exist.append (j['jid'])
+              if ekey in exist:
+                 log(2, "Jail with %s '%s' already exist!" % (ikey, ekey))
+                 continue
+              else:
+                 new_jail['jid'] = str(ekey)
+                 break
+
+# enter jail hostname
+           if ikey == 'hostname':
+              exist = []
+              for j in jails:
+                 exist.append (j['host.hostname'])
+              if ekey in exist:
+                 log(2, "Jail with %s '%s' already exist!" % (ikey, ekey))
+                 continue
+              else:
+                 new_jail['host.hostname'] = ekey
+                 break
+# enter jail vnet gateway or be system
+           if ikey == 'vnet':
+              if 'y' in ekey:
+
+                 while True:
+                    print ''
+                    gws = gateways('table')
+                    egw = raw_input("enter jail gateway %s" % prompt)
+# check if entered gw exist
+                    if ch_ipv4(egw) != False:
+
+                       for j in gws:
+                          gname = j['name']
+                          gaddr = j['addr']
+                          if egw == gaddr['addr']:
+                              new_jail['$jgw'] = gaddr['addr']
+                              new_jail[ '$bridge'] = gname
+                              new_jail[ 'gwnetmask']= gaddr['netmask']
+                              new_jail['vnet'] = 1
+                              break
+# check if we find valid gw
+                       if new_jail['$jgw']:
+                           break
+                       else:
+                          log(2, "'%s' is not a valid gateway ip address!" % (egw))
+                          continue
+                    else:
+                       log(2, "'%s' is not a valid gateway ip address!" % (egw))
+                       continue
+                 break
+              else:
+                 new_jail['vnet'] = 0
+                 new_jail['$jgw'] = 'system'
+                 break
+# check if ip address already in use or is not a part from selected GW:
+           if ikey == 'ip':
+              if ch_ipv4(ekey) != False:
+                 if new_jail['$jgw'] != 'system':
+                    if bridge_network_check(ekey, new_jail['$jgw'], new_jail[ 'gwnetmask']) != False:
+                       new_jail['$jip'] = ekey
+                    else:
+                       log(2, "'%s' is not a part from %s/%s network!" % (ekey, new_jail['$jgw'], new_jail[ 'gwnetmask']))
+                       continue
+
+                 for j in jails:
+                    if new_jail['$jip'] == j['$jip'][:-3]:
+                       log(2, "'%s' ip address is used by '%s' jail!" % (ekey, j['name']))
+                       continue
+
+                 break
+              log(2, "'%s' is not a valid ip address!" % (ekey))
+              continue
+
+           if ikey == 'zfs':
+              break
+           if ikey == 'path':
+              break
+           if ikey == 'src':
+              break
+
+   print new_jail
+   print jails[2]
+
+
 ########################################################################################
 # MAIN MENU
 ########################################################################################
@@ -875,6 +1013,8 @@ def cli():
 ########################################################################################
 # Start Jadm script
 ########################################################################################
+
+jail_input()
 
 if len(sys.argv) > 1:
 # use cli interface
