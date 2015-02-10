@@ -38,6 +38,7 @@ from datetime import datetime
 from tabulate import tabulate
 from ipaddress import *
 import sys
+import os
 import logging
 import subprocess
 import netifaces
@@ -692,20 +693,19 @@ def jail_input(modify = None):
 # create new jail or modify existing jail (settings input)
 #
    """
-
    load_jails = load_jail_config(jailconf)
    jails, gsettings = load_jails[0], load_jails[1]
 
    if modify == None:
       prompt = ':> '
       acText = 'Create New'
+      input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path', 'install src']
    else:
       acText = 'Modify'
+      input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path']
 
    new_jail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
                '$jgw':'','path':'', 'zfs':0, }
-
-   input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path', 'src']
 
    print "----------------------------------------------------"
    print "                %s Jail " % acText
@@ -713,6 +713,13 @@ def jail_input(modify = None):
 
    for ikey in input_keys:
        while True:
+
+# choose install source - only for new jail
+           if ikey == 'install src':
+             print ""
+             print tabulate([['template', 'existing jail for template' ], ['bsd',  'bdsinstaller'],  ['src', 'bsd pre compiled sources /usr/src/' ],
+                            ["skel", "jail skeleton model"]], ['Install Source',  'Description'])
+
            if ikey in ['vnet', 'zfs']:
               ekey = raw_input("is %s jail (y) %s" % (ikey, prompt))
            else:
@@ -789,25 +796,51 @@ def jail_input(modify = None):
                        continue
                     else:
                        new_jail['zfs'] = ['%s/%s' % (ezfs, new_jail['name'])]
+# use zfs quota -----------
+                       while True:
+                          zquota = raw_input("enter zfs quota %s" % prompt)
+                          if  zquota in ['\n', '', ' ', '	']:
+                             new_jail['zfs'].append('none')
+                             break
+                          if  check_jail_Setting('zquota', zquota) == False:
+                             continue
+                          else:
+                             new_jail['zfs'].append(zquota)
+                             break
+# use zfs quota -----------
                        break
               break
-# use zfs quota
-           if  new_jail['zfs'] != 0:
-              while True:
-                 zquota = raw_input("enter zfs quota %s" % prompt)
-                 if  zquota in ['\n', '', ' ', '	']:
-                     new_jail['zfs'].append('none')
-                     break
-                 if  check_jail_Setting('zquota', zquota) == False:
-                    continue 
-                 else:
-                    new_jail['zfs'].append(zquota)
 # enter jail path
            if ikey == 'path':
-              break
-# choose install source
-           if ikey == 'src':
-              break
+# try to use global setting path as zfs:
+              if ekey == '':
+                       for x in gsettings:
+                          if 'path' in x[1]:
+                             if '$name' in x[1]:
+                                y = x[1].split('=')
+                                ekey = '%s%s' % (y[1][1:-6], new_jail['name'])
+                                log(0, "global path found - '%s' will be used!" % ekey)
+              if ekey == '':
+                 log(2, " not valid path!")
+                 continue
+              if check_jail_Setting(ikey, ekey) == False:
+                 continue
+              else:
+                 if '/' != ekey[0]:
+                     log(2, "'%s' is not valid path!" % ekey)
+                     continue
+                 new_jail['path'] = ekey
+                 if new_jail['zfs'] != 0:
+                    new_jail['zfs'].append(ekey)
+                 break
+
+# choose install source - only for new jail
+           if ikey == 'install src':
+             if check_jail_Setting(ikey, ekey) == False:
+                 continue
+             else:
+                 new_jail['install'] = [ekey]
+                 break
 
    print new_jail
    print jails
@@ -900,7 +933,7 @@ def check_jail_Setting(setting, val):
                return False
          else:
             return False
-# checl zfs quota
+# check zfs quota
    if setting == 'zquota':
       if val[-1] in ('K', 'M', 'G', 'T', 'P', 'E'):
          try:
@@ -911,6 +944,21 @@ def check_jail_Setting(setting, val):
       else:
          log(2, "'%s' is not correct zfs quota format!  xxx('K', 'M', 'G', 'T', 'P', 'E') " % val)
          return False
+# check is we can use path = val
+   if setting == 'path':
+       if zfs(val)[2] == 1:
+         log(2, "'%s' already exist zfs path!" % val)
+         return False
+
+       if os.path.isdir(val) == True:
+         log(2, "'%s' already exist!" % val)
+         return False
+# check install source
+   if setting == 'install src':
+       install_src = ['bsd', 'template', 'skel', 'src']
+       if val not in install_src:
+          log(2, "enter only  %s!" % install_src)
+          return False
 
 ########################################################################################
 # MAIN MENU
