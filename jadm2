@@ -535,7 +535,7 @@ def bridge_network_check(ip, bridge_ip, bridge_netmask):
       brctl = 1
 
 # return brctl and bridge ip network
-   return brctl
+   return [brctl, brdige_network]
 
 def globals(action = None, setting = None):
    """
@@ -771,10 +771,11 @@ def jail_input(modify = None):
                  break
 # enter ip address already 
            if ikey == 'ip':
-              if check_jail_Setting(ikey, [ekey, new_jail]) == False:
+              ip = check_jail_Setting(ikey, [ekey, new_jail])
+              if ip == False:
                  continue
               else:
-                 new_jail['$jip'] = ekey
+                 new_jail['$jip'] = ip
                  break
 # create zfs if is needed
            if ikey == 'zfs':
@@ -836,7 +837,7 @@ def jail_input(modify = None):
 
 # choose install source - only for new jail
            if ikey == 'install src':
-             if check_jail_Setting(ikey, ekey) == False:
+             if check_jail_Setting(ikey, [ekey]) == False:
                  continue
              else:
                  new_jail['install'] = [ekey]
@@ -902,20 +903,36 @@ def check_jail_Setting(setting, val):
        log(2, "'%s' is not a valid gateway ip address!" % (val[0]))
        return False
 
-# check if tshi ip is aveilable
+# check if this ip is available
 # val[0] - ip, vla[1] new_jail{}
    if setting == 'ip':
-      if ch_ipv4(val[0]) == False:
-            log(2, "'%s' is not a valid ip address!" % (val[0]))
+#  create ip list
+      jip = val[0].split(',')
+      for ip in jip:
+         ip = ip.replace(' ', '')
+         if ch_ipv4(ip) == False:
+            log(2, "'%s' is not a valid ip address!" % (ip))
             return False
-      if val[1]['$jgw'] != 'system':
-         if bridge_network_check(val[0], val[1]['$jgw'], val[1]['gwnetmask']) == False:
-            log(2, "'%s' is not a part from %s/%s network!" % (val[0], val[1]['$jgw'], val[1][ 'gwnetmask']))
-            return False
+# check if we use this ip address in other jail
          for j in jails:
-            if val[1]['$jip'] == j['$jip'][:-3]:
-               log(2, "'%s' ip address is used by '%s' jail!" % (val[0], j['name']))
+            exjip = j['$jip'].split(',')
+            for i in exjip:
+               if ip == i:
+                  log(2, "'%s' ip address is used by '%s' jail!" % (ip, j['name']))
+                  return False
+# check is we use vnet
+         if val[1]['$jgw'] != 'system':
+            br_network = bridge_network_check(ip, val[1]['$jgw'], val[1]['gwnetmask'])
+            if br_network[0] == 0:
+               log(2, "'%s' is not a part from %s/%s network!" % (ip, val[1]['$jgw'], val[1][ 'gwnetmask']))
                return False
+            if ip == val[1]['$jgw']:
+               log(2, "'%s' ip address is same as selected gateway!" % ip)
+               return False
+            mask = str(br_network[1]).split('/')
+            return_ip = "%s/%s" % (ip, mask[1])
+      return val[0]
+
 # check jail zfs root -----------------
    if setting == 'zfs':
 # get/create zfs 
@@ -933,6 +950,7 @@ def check_jail_Setting(setting, val):
                return False
          else:
             return False
+
 # check zfs quota
    if setting == 'zquota':
       if val[-1] in ('K', 'M', 'G', 'T', 'P', 'E'):
@@ -944,6 +962,7 @@ def check_jail_Setting(setting, val):
       else:
          log(2, "'%s' is not correct zfs quota format!  xxx('K', 'M', 'G', 'T', 'P', 'E') " % val)
          return False
+
 # check is we can use path = val
    if setting == 'path':
        if zfs(val)[2] == 1:
@@ -953,6 +972,7 @@ def check_jail_Setting(setting, val):
        if os.path.isdir(val) == True:
          log(2, "'%s' already exist!" % val)
          return False
+
 # check install source
    if setting == 'install src':
        install_src = ['bsd', 'template', 'skel', 'src']
