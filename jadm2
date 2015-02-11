@@ -703,14 +703,17 @@ def jail_input(modify = None):
       settings_menu = ['Jail', 'Setting']
       new_jail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
                '$jgw':'','path':'', 'zfs':0, }
-      modjail = {}
+      modjail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
+               '$jgw':'','path':'', 'zfs':['', '', ''], }
    else:
-      acText = 'Modify'
+      modjail = check_jail_Setting('modify', modify)
+      if modjail == False:
+         return False
+      acText = "Modify '%s'" % modjail['name']
       input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path']
       settings_menu = ['Jail', 'Setting', 'Old Setting']
       new_jail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
                '$jgw':'','path':'', 'zfs':0, }
-      modjail = modify
 
    print "----------------------------------------------------"
    print "                %s Jail " % acText
@@ -718,6 +721,12 @@ def jail_input(modify = None):
 
    for ikey in input_keys:
        while True:
+
+           if modify != None:
+              input_keys_correction = ['name', 'jid', 'host.hostname','vnet', '$jip', 'zfs', 'path']
+              jindex = input_keys_correction[input_keys.index(ikey)]
+              prompt = "(%s) :> " % modjail[jindex]
+
 # choose install source - only for new jail
            if ikey == 'install src':
              print ""
@@ -733,6 +742,14 @@ def jail_input(modify = None):
            if '!' in ekey:
               log(0, 'user exit - !')
               return False
+
+# if new settings == old settings
+           if ekey in ['', ' ', '   ']:
+               new_jail[jindex] == ekey
+               break
+           if ekey == modjail[jindex]:
+               new_jail[jindex] == ekey
+               break
 
 # enter jail name
            if ikey == 'name':
@@ -891,8 +908,8 @@ def jail_input(modify = None):
                            ['Gateway', new_jail['$jgw'], modjail['$jgw']],
                            ['Path', new_jail['path'], modjail['path']]]
       if new_jail['zfs'] != 0:
-          men_jail_settings.append(['Zfs', new_jail['zfs'][0], modjail['zfs'][0]],
-                                   ['Zfs Quota', new_jail['zfs'][-1], modjail['zfs'][-1]])
+          men_jail_settings.append(['Zfs', new_jail['zfs'][0], modjail['zfs'][0]])
+          men_jail_settings.append(['Zfs Quota', new_jail['zfs'][1], modjail['zfs'][1]])
       print tabulate(men_jail_settings, settings_menu)
       print " "
       yn = raw_input("confirm (y):>")
@@ -911,6 +928,16 @@ def check_jail_Setting(setting, val):
 
    load_jails = load_jail_config(jailconf)
    jails, gsettings = load_jails[0], load_jails[1]
+
+# check if modify jail/jid exist
+   if setting == 'modify':
+      for j in jails:
+         if j['name'] == val:
+            return j
+         if j['jid'] == val:
+            return j
+      log(2, "'%s' is not existing jail!" % val)
+      return False
 
 # check if we can use name = val
    if setting == 'name':
@@ -1259,7 +1286,7 @@ def cli():
 # Start Jadm script
 ########################################################################################
 
-jail_input()
+jail_input('test1')
 
 if len(sys.argv) > 1:
 # use cli interface
