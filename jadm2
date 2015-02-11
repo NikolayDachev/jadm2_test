@@ -713,13 +713,13 @@ def jail_input(modify = None):
 
    for ikey in input_keys:
        while True:
-
 # choose install source - only for new jail
            if ikey == 'install src':
              print ""
              print tabulate([['template', 'existing jail for template' ], ['bsd',  'bdsinstaller'],  ['src', 'bsd pre compiled sources /usr/src/' ],
                             ["skel", "jail skeleton model"]], ['Install Source',  'Description'])
 
+# main prompt start here
            if ikey in ['vnet', 'zfs']:
               ekey = raw_input("is %s jail (y) %s" % (ikey, prompt))
            else:
@@ -837,14 +837,26 @@ def jail_input(modify = None):
 
 # choose install source - only for new jail
            if ikey == 'install src':
-             if check_jail_Setting(ikey, [ekey]) == False:
+             if check_jail_Setting(ikey, ekey) == False:
                  continue
              else:
                  new_jail['install'] = [ekey]
                  break
 
+# print existing jails table if we will use template for install
+   if new_jail['install'][0] == 'template':
+      while True:
+         print ""
+         jail_table(['jls'])
+         ekey = raw_input('enter %s name/jid %s' % (new_jail['install'][0], prompt))
+         template =  check_jail_Setting('template', ekey)
+         if template == False:
+            continue
+         else:
+            new_jail['install'].append(template)
+            break
+
    print new_jail
-   print jails
 
 def check_jail_Setting(setting, val):
    """
@@ -979,6 +991,31 @@ def check_jail_Setting(setting, val):
        if val not in install_src:
           log(2, "enter only  %s!" % install_src)
           return False
+       if val == 'template':
+          if jails == False:
+              log(2, "Jail list is empty!")
+              return False
+       if val == 'skel':
+          if jails != False:
+             for j in jails:
+                 if 'BASE' == j['name']:
+                    return True
+          log(2, "'BASE' jail not exist!")
+          print "   Please use 'create BASE' before continue!"
+          return False
+       if val == 'src':
+          log(1, "'src' will use pre build freebsd sources from /usr/src!")
+          print "   please use 'create buildsrc' before continue if make buildworld"
+          print "   is not done on this system or do this manually"
+          print ""
+
+# check if selected template exist
+   if setting == 'template':
+      for j in jails:
+         if val in j.values():
+             return j['name']
+      log(2, "'%s' is not existing jail!" % val)
+      return False
 
 ########################################################################################
 # MAIN MENU
