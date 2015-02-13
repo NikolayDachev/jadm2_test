@@ -704,17 +704,18 @@ def jail_input(modify = None):
       new_jail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
                '$jgw':'','path':'', 'zfs':0, }
       modjail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
-               '$jgw':'','path':'', 'zfs':['', '', ''], }
+               '$jgw':'','path':'', 'zfs':['', '', ''] }
    else:
       modjail = check_jail_Setting('modify', modify)
-      print modjail
       if modjail == False:
          return False
+# fix if is not vnet
+      modjail['vnet'] = ''
       acText = "Modify '%s'" % modjail['name']
       input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path']
       settings_menu = ['Jail', 'Setting', 'Old Setting']
-      new_jail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
-               '$jgw':'','path':'', 'zfs':0, }
+      new_jail = modjail
+      new_jail['install'] = ['']
 
    print "----------------------------------------------------"
    print "                %s Jail " % acText
@@ -751,7 +752,7 @@ def jail_input(modify = None):
               prompt = "(%s) :> " % cr_prompt
 
               if ikey in ['vnet', 'zfs']:
-                 ekey = raw_input("is %s jail (y) %s" % (ikey, prompt))
+                 ekey = raw_input("is %s jail (y/n) %s" % (ikey, prompt))
               else:
                  ekey = raw_input('enter jail %s %s' % (ikey, prompt))
 # if new settings == old settings
@@ -763,14 +764,17 @@ def jail_input(modify = None):
                     if modjail['zfs'] != 1:
                         ekey = 'y'
                  elif ikey == 'ip':
-                    ekey = modjail['$jip'][:-3]
+                    if 'vnet' == 1:
+                       ekey = modjail['$jip'][:-3]
+                    else:
+                       ekey = modjail['$jip']
                  else:
                     new_jail[jindex] == ekey
                     break
            else:
 # main prompt start here
               if ikey in ['vnet', 'zfs']:
-                 ekey = raw_input("is %s jail (y) %s" % (ikey, prompt))
+                 ekey = raw_input("is %s jail (y/n) %s" % (ikey, prompt))
               else:
                  ekey = raw_input('enter jail %s %s' % (ikey, prompt))
 # exit
@@ -844,7 +848,13 @@ def jail_input(modify = None):
            if ikey == 'zfs':
               if 'y' in ekey:
                  while True:
-                    ezfs = raw_input("enter zfs root %s" % prompt)
+# if we modify exsiting jail
+                    if modify != None:
+                        ezfs = raw_input("enter zfs root (%s) :> " % modjail['zfs'][0])
+                        if ezfs in ['', ' ', '   ']:
+                            ezfs = modjail['zfs'][0]
+                    else:
+                        ezfs = raw_input("enter zfs root %s" % prompt)
 # exit
                     if '!' in ezfs:
                        log(0, 'user exit - !')
@@ -866,7 +876,13 @@ def jail_input(modify = None):
                        new_jail['zfs'] = ['%s/%s' % (ezfs, new_jail['name'])]
 # use zfs quota -----------
                        while True:
-                          zquota = raw_input("enter zfs quota %s" % prompt)
+# if we modify exsiting jail
+                          if modify != None:
+                             zquota = raw_input("enter zfs quota (%s) :> " % modjail['zfs'][-2])
+                             if zquota in ['', ' ', '   ']:
+                                zquota = modjail['zfs'][-2]
+                          else:
+                             zquota = raw_input("enter zfs quota %s" % prompt)
 # exit
                           if '!' in zquota:
                              log(0, 'user exit - !')
@@ -1037,8 +1053,12 @@ def check_jail_Setting(setting, val):
             exjip = j['$jip'].split(',')
             for i in exjip:
                if ip == i:
-                  log(2, "'%s' ip address is used by '%s' jail!" % (ip, j['name']))
-                  return False
+# nasty check modify ip if new ip = old ip :(
+                  if val[1]['name'] == j['name']:
+                     pass
+                  else:
+                     log(2, "'%s' ip address is used by '%s' jail!" % (ip, j['name']))
+                     return False
 # check is we use vnet
          if val[1]['$jgw'] != 'system':
             br_network = bridge_network_check(ip, val[1]['$jgw'], val[1]['gwnetmask'])
@@ -1319,7 +1339,7 @@ def cli():
 # Start Jadm script
 ########################################################################################
 
-jail_input('test1')
+jail_input('test2')
 
 if len(sys.argv) > 1:
 # use cli interface
