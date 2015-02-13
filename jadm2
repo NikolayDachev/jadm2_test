@@ -707,6 +707,7 @@ def jail_input(modify = None):
                '$jgw':'','path':'', 'zfs':['', '', ''], }
    else:
       modjail = check_jail_Setting('modify', modify)
+      print modjail
       if modjail == False:
          return False
       acText = "Modify '%s'" % modjail['name']
@@ -722,34 +723,60 @@ def jail_input(modify = None):
    for ikey in input_keys:
        while True:
 
-           if modify != None:
-              input_keys_correction = ['name', 'jid', 'host.hostname','vnet', '$jip', 'zfs', 'path']
-              jindex = input_keys_correction[input_keys.index(ikey)]
-              prompt = "(%s) :> " % modjail[jindex]
-
 # choose install source - only for new jail
            if ikey == 'install src':
              print ""
              print tabulate([['template', 'existing jail for template' ], ['bsd',  'bdsinstaller'],  ['src', 'bsd pre compiled sources /usr/src/' ],
                             ["skel", "jail skeleton model"]], ['Install Source',  'Description'])
 
-# main prompt start here
-           if ikey in ['vnet', 'zfs']:
-              ekey = raw_input("is %s jail (y) %s" % (ikey, prompt))
+           if modify != None:
+              input_keys_correction = ['name', 'jid', 'host.hostname','vnet', '$jip', 'zfs', 'path']
+              jindex = input_keys_correction[input_keys.index(ikey)]
+# display current jail setting
+              cr_prompt = modjail[jindex]
+
+              if ikey == 'vnet':
+                 if modjail[ikey] == 1:
+                     yn_prompt = 'is vnet'
+                 else:
+                     yn_prompt = 'is not vnet'
+                 cr_prompt = yn_prompt
+
+              if ikey == 'zfs':
+                 if modjail[ikey] != 0:
+                     yn_prompt = 'is zfs'
+                 else:
+                     yn_prompt = 'is not zfs'
+                 cr_prompt = yn_prompt
+              prompt = "(%s) :> " % cr_prompt
+
+              if ikey in ['vnet', 'zfs']:
+                 ekey = raw_input("is %s jail (y) %s" % (ikey, prompt))
+              else:
+                 ekey = raw_input('enter jail %s %s' % (ikey, prompt))
+# if new settings == old settings
+              if ekey in ['', ' ', '   ']:
+                 if ikey == 'vnet':
+                     if modjail['vnet'] == 1:
+                        ekey = 'y'
+                 elif ikey == 'zfs':
+                    if modjail['zfs'] != 1:
+                        ekey = 'y'
+                 elif ikey == 'ip':
+                    ekey = modjail['$jip'][:-3]
+                 else:
+                    new_jail[jindex] == ekey
+                    break
            else:
-              ekey = raw_input('enter jail %s %s' % (ikey, prompt))
+# main prompt start here
+              if ikey in ['vnet', 'zfs']:
+                 ekey = raw_input("is %s jail (y) %s" % (ikey, prompt))
+              else:
+                 ekey = raw_input('enter jail %s %s' % (ikey, prompt))
 # exit
            if '!' in ekey:
               log(0, 'user exit - !')
               return False
-
-# if new settings == old settings
-           if ekey in ['', ' ', '   ']:
-               new_jail[jindex] == ekey
-               break
-           if ekey == modjail[jindex]:
-               new_jail[jindex] == ekey
-               break
 
 # enter jail name
            if ikey == 'name':
@@ -774,11 +801,17 @@ def jail_input(modify = None):
                  break
 # enter jail vnet gateway or be system
            if ikey == 'vnet':
-              if 'y' in ekey:
+              if 'y' == ekey:
                  while True:
                     print ''
                     gws = gateways('table')
-                    egw = raw_input("enter jail gateway %s" % prompt)
+# if we modify exsiting jail
+                    if modify != None:
+                        egw = raw_input("enter jail gateway (%s) :> " % modjail['$jgw'])
+                        if egw in ['', ' ', '   ']:
+                            egw = modjail['$jgw']
+                    else:
+                       egw = raw_input("enter jail gateway %s" % prompt)
 # exit
                     if '!' in egw:
                        log(0, 'user exit - !')
