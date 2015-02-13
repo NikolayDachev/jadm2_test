@@ -711,6 +711,9 @@ def jail_input(modify = None):
          return False
 # fix if is not vnet
       modjail['vnet'] = ''
+# fix if is not 'zfs'
+      if modjail['zfs'] == 0:
+         modjail['zfs'] = ['none', 'none', 'none']
       acText = "Modify '%s'" % modjail['name']
       input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path']
       settings_menu = ['Jail', 'Setting', 'Old Setting']
@@ -744,7 +747,7 @@ def jail_input(modify = None):
                  cr_prompt = yn_prompt
 
               if ikey == 'zfs':
-                 if modjail[ikey] != 0:
+                 if modjail[ikey] != 'none':
                      yn_prompt = 'is zfs'
                  else:
                      yn_prompt = 'is not zfs'
@@ -761,7 +764,7 @@ def jail_input(modify = None):
                      if modjail['vnet'] == 1:
                         ekey = 'y'
                  elif ikey == 'zfs':
-                    if modjail['zfs'] != 1:
+                    if modjail['zfs'][0] != 'none':
                         ekey = 'y'
                  elif ikey == 'ip':
                     if 'vnet' == 1:
@@ -873,7 +876,7 @@ def jail_input(modify = None):
                     if ezfs_check == False:
                        continue
                     else:
-                       new_jail['zfs'] = ['%s/%s' % (ezfs, new_jail['name'])]
+                       new_jail['zfs'][0] = '%s/%s' % (ezfs, new_jail['name'])
 # use zfs quota -----------
                        while True:
 # if we modify exsiting jail
@@ -888,12 +891,12 @@ def jail_input(modify = None):
                              log(0, 'user exit - !')
                              return False
                           if  zquota in ['\n', '', ' ', '	']:
-                             new_jail['zfs'].append('none')
+                             new_jail['zfs'][1] = 'none'
                              break
                           if  check_jail_Setting('zquota', zquota) == False:
                              continue
                           else:
-                             new_jail['zfs'].append(zquota)
+                             new_jail['zfs'][1] = zquota
                              break
 # use zfs quota -----------
                        break
@@ -956,7 +959,7 @@ def jail_input(modify = None):
                            ['IP', new_jail['$jip'], modjail['$jip']],
                            ['Gateway', new_jail['$jgw'], modjail['$jgw']],
                            ['Path', new_jail['path'], modjail['path']]]
-      if new_jail['zfs'] != 0:
+      if new_jail['zfs'][0] != 'none':
           men_jail_settings.append(['Zfs', new_jail['zfs'][0], modjail['zfs'][0]])
           men_jail_settings.append(['Zfs Quota', new_jail['zfs'][1], modjail['zfs'][1]])
       print tabulate(men_jail_settings, settings_menu)
