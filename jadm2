@@ -717,7 +717,8 @@ def jail_input(modify = None):
       acText = "Modify '%s'" % modjail['name']
       input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path']
       settings_menu = ['Jail', 'Setting', 'Old Setting']
-      new_jail = modjail
+# copy jail settings when we modify them
+      new_jail = modjail.copy()
       new_jail['install'] = ['']
 
    print "----------------------------------------------------"
