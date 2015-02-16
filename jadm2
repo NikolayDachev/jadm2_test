@@ -1159,7 +1159,12 @@ class lcmd(cmd.Cmd):
 #  interactive main menu with 'cmd' function
 #
    """
+   jails_config = load_jail_config(jailconf)[0]
    prompt = 'jadm:> '
+
+   jails = []
+   for i in jails_config:
+       jails.append(i['name'])
 
    local_global = ['remove',  'add']
    snap = ['list', 'create',  'remove',  'restore']
@@ -1294,6 +1299,25 @@ class lcmd(cmd.Cmd):
          completions = [ f for f in self.local_global if f.startswith(text)]
          return completions
 
+   def do_create(self, arg):
+      """ Create new jail
+      """
+      jail_input()
+
+   def do_modify(self, arg):
+       """ Modify jail
+        - usage: modify 'name/jid'
+       """
+       jail_input(arg)
+
+   def complete_modify(self, text, line, begidx, endidx):
+      if not text:
+         completions = self.jails[:]
+      else:
+         completions = [ f for f in self.jails if f.startswith(text)]
+         return completions
+
+
 def cli():
    """
 ########################################################################################
@@ -1342,8 +1366,6 @@ def cli():
 ########################################################################################
 # Start Jadm script
 ########################################################################################
-
-jail_input('test2')
 
 if len(sys.argv) > 1:
 # use cli interface
