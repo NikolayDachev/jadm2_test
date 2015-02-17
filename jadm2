@@ -109,6 +109,24 @@ net = [
 # Main Functions
 ########################################################################################
 
+def jadm_postinstall(new_jail_path):
+   """
+########################################################################################
+# customize jails after installation finish
+# do it after create_jail(install_path) finish
+# you can customize it if you know how!
+#
+   """
+# simple echo to new jail /etc/ config
+   log("      INFO: JADM run postinstall")
+   os.system("echo '# Added by JADM' >> %s" % (new_jail_path+"/etc/rc.conf"))
+   os.system("echo 'sendmail_enable=\"NONE\"' >> %s" % (new_jail_path+"/etc/rc.conf"))
+   os.system("echo 'firewall_enable=\"YES\"' >> %s" % (new_jail_path+"/etc/rc.conf"))
+   os.system("echo 'firewall_script=\"/etc/rc.firewall\"' >> %s" % (new_jail_path+"/etc/rc.conf"))
+   os.system("echo 'firewall_type=\"OPEN\"' >> %s" % (new_jail_path+"/etc/rc.conf"))
+   os.system("touch %s" % (new_jail_path+"/etc/resolv.conf"))
+   os.system("echo 'nameserver 8.8.8.8' >> %s" % (new_jail_path+"/etc/resolv.conf"))
+
 def load_jail_config(conf_f):
    """
 ########################################################################################
