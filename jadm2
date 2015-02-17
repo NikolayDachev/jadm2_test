@@ -1177,8 +1177,45 @@ def create_jail(newjail):
 #  create new jail
 #
    """
-   print "create %s" % newjail['name']
-   pass
+   jails = load_jail_config(jailconf)[0]
+
+# 1. create jail home folder
+   subprocess.call('mkdir -p %s' % newjail['path'], shell=False)
+   log(0 ,"jail home folder '%s' was created!" % newjail['path'])
+
+# 2. if we use zfs
+   if newjail['zfs'][0] != 'none':
+      subprocess.call("zfs create %s" % newjail['zfs'][0], shell=False )
+      subprocess.call("zfs set mountpoint=%s %s" % (newjail['zfs'][0], newjail['path'], shell=False )
+      log(0 ,"jail zfs '%s' was created!" % newjail['zfs'][0])
+
+      if newjail['zfs'][-2] != 'none':
+          subprocess.call("zfs set quota=%s %s" % (newjail['zfs'][0], newjail['zfs'][-2]), shell=False )
+          log(0 ,"jail zfs quota '%s' to '%s' was added!" % (newjail['zfs'][-2], newjail['zfs'][0]))
+
+# 3. select install method
+   if newjail['install'][0] == 'bsd':
+      subprocess.call("bsdinstall jail %s" % (newjail['path']), shell=False)
+
+   if newjail['install'][0] == 'src':
+      subprocess.call("cd /usr/src && make installworld DESTDIR=%s" % (newjail['path']), shell=False)
+      subprocess.call("cd /usr/src && make distribution DESTDIR=%s" % (newjail['path']), shell=False)
+
+   if newjail['install'][0] == 'skel':
+# find BASE jail
+      for i in jails:
+         if i['name'] == newjail['modify']:
+            base = i
+            break
+      subprocess.call('mkdir -p %s/rw' % newjail['path'], shell=False)
+      subprocess.call('mkdir -p %s/mnt' % newjail['path'], shell=False)
+      subprocess.call('cp -R %s/SROOT/ %s/mnt/SROOT/' % (newjail['path'], base['path']), shell=False)
+
+   if newjail['install'][0] == 'template':
+       pass
+
+   log(0, "jail was installed from '%s'" % newjail['install'][0])
+
 
 def modify_jail(newjail):
    """
