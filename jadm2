@@ -702,7 +702,7 @@ def jail_input(modify = None):
       input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path', 'install src']
       settings_menu = ['Jail', 'Setting']
       new_jail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
-               '$jgw':'','path':'', 'zfs':0, }
+               '$jgw':'','path':'', 'zfs':['none', 'none', 'none']}
       modjail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
                '$jgw':'','path':'', 'zfs':['', '', ''] }
    else:
@@ -710,10 +710,13 @@ def jail_input(modify = None):
       if modjail == False:
          return False
 # fix if is not vnet
-      modjail['vnet'] = ''
+      if 'vnet' not in modjail.keys():
+         modjail['vnet'] = ''
 # fix if is not 'zfs'
       if modjail['zfs'] == 0:
          modjail['zfs'] = ['none', 'none', 'none']
+#add empty 'install'
+      modjail['install'] =  ['']
       acText = "Modify '%s'" % modjail['name']
       input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path']
       settings_menu = ['Jail', 'Setting', 'Old Setting']
@@ -741,14 +744,14 @@ def jail_input(modify = None):
               cr_prompt = modjail[jindex]
 
               if ikey == 'vnet':
-                 if modjail[ikey] == 1:
+                 if modjail['vnet'] == 1:
                      yn_prompt = 'is vnet'
                  else:
                      yn_prompt = 'is not vnet'
                  cr_prompt = yn_prompt
 
               if ikey == 'zfs':
-                 if modjail[ikey] != 'none':
+                 if modjail['zfs'][0] != 'none':
                      yn_prompt = 'is zfs'
                  else:
                      yn_prompt = 'is not zfs'
@@ -768,7 +771,7 @@ def jail_input(modify = None):
                     if modjail['zfs'][0] != 'none':
                         ekey = 'y'
                  elif ikey == 'ip':
-                    if 'vnet' == 1:
+                    if new_jail['vnet'] == 1:
                        ekey = modjail['$jip'][:-3]
                     else:
                        ekey = modjail['$jip']
@@ -846,7 +849,10 @@ def jail_input(modify = None):
               if ip == False:
                  continue
               else:
-                 new_jail['$jip'] = ip
+                 if ip == modjail['$jip'][:-3]:
+                    new_jail['$jip'] = '%s%s' % (ip, modjail['$jip'][-3:])
+                 else:
+                    new_jail['$jip'] = ip
                  break
 # create zfs if is needed
            if ikey == 'zfs':
@@ -922,8 +928,8 @@ def jail_input(modify = None):
                      log(2, "'%s' is not valid path!" % ekey)
                      continue
                  new_jail['path'] = ekey
-                 if new_jail['zfs'] != 0:
-                    new_jail['zfs'].append(ekey)
+                 if new_jail['zfs'][0] != 'none':
+                    new_jail['zfs'][2] = ekey
                  break
 
 # choose install source - only for new jail
@@ -970,7 +976,23 @@ def jail_input(modify = None):
          log(0, 'user exit - !')
          return False
       else:
-         break
+# check if we have changes:
+         modjail_diff = 0
+         for i in modjail.keys():
+            if new_jail[i] != modjail[i]:
+               modjail_diff = 1
+         if modjail_diff == 0:
+            log(0, "no changes in '%s' settings" % modjail['name'])
+            return False
+
+# proceede new_jail
+         if modify == None:
+            create_jail(new_jail)
+         else:
+            new_jail['modify'] = modjail['name']
+            modify_jail(new_jail)
+# exit
+         return False
 
 def check_jail_Setting(setting, val):
    """
@@ -1148,6 +1170,33 @@ def check_jail_Setting(setting, val):
              return j['name']
       log(2, "'%s' is not existing jail!" % val)
       return False
+
+def create_jail(newjail):
+   """
+########################################################################################
+#  create new jail
+#
+   """
+   print "create %s" % newjail['name']
+   pass
+
+def modify_jail(newjail):
+   """
+########################################################################################
+#  modify existing jail
+#  newjail['modify'] - this is the original jail name
+#
+   """
+   jails = load_jail_config(jailconf)[0]
+# find modify jail
+   for i in jails:
+       if i['name'] == newjail['modify']:
+           modjail = i
+           break
+
+   print "new jail: %s" % newjail
+   print "org jail: %s" % modjail
+   pass
 
 ########################################################################################
 # MAIN MENU
