@@ -1388,8 +1388,9 @@ def BASE(src, path = None):
 
    if src == 'src':
       try:
-         subprocess.call(['cd', '/usr/src', '&&', 'make', 'installworld', 'DESTDIR=%s' % path])
-         subprocess.call(['cd', '/usr/src', '&&', 'make', 'distribution', 'DESTDIR=%s' % path])
+         subprocess.call(['cd', '/usr/src'])
+         subprocess.call(['make', 'installworld', 'DESTDIR=%s' % path])
+         subprocess.call(['make', 'distribution', 'DESTDIR=%s' % path])
       except:
          log(2, "'BASE' cannot be installed from 'src'!")
          return False
