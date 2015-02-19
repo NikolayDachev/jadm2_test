@@ -33,19 +33,21 @@ OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITU
 # socket - jadm client/server
 # AES - aes encryption
 # base64 aes encription help
+# ftplib - download freebsd bin install files
 
 from datetime import datetime
 from tabulate import tabulate
 from ipaddress import *
+from Crypto.Cipher import AES
 import sys
 import os
 import logging
 import subprocess
 import netifaces
 import cmd
+import ftplib
 import paramiko
 import socket
-from Crypto.Cipher import AES
 import base64
 
 ########################################################################################
@@ -691,11 +693,11 @@ def update_jail_conf(update):
                    'jid = %s;' % jail['jid'],
                    '$jip = "%s";' % jail['$jip'],
                    '$jgw = "%s";' % jail['$jgw'],
-                   '$bridge = "%s";' % jail['$bridge'],
                    'host.hostname = "%s";' % jail['host.hostname'],
                    'path = "%s";' % jail['path'],]
 # jail networking
-      if 'vnet' in jail.keys():
+      if jail['vnet'] == 1:
+         jail_conf.extend(['$bridge = "%s";' % jail['$bridge']])
          jail_conf.extend(vnet)
       else:
          jail_conf.extend(net)
@@ -1263,6 +1265,10 @@ def create_jail(newjail):
          if i['name'] == 'BASE':
             base = i
             break
+      if base == None:
+          log(2, "'BASE' jail not exist!")
+          return False
+
       subprocess.call(['mkdir', '-p', '%s/rw' % newjail['path']])
       subprocess.call(['mkdir', '-p', '%s/mnt' % newjail['path']])
       subprocess.call(['cp', '-R', '%s/SROOT/' % base['path'], '%s/rw' % newjail['path']])
@@ -1303,6 +1309,97 @@ def modify_jail(newjail):
 
 # jail completely modified
    log(0, "jail '%s' was successful modified!" % newjail['name'], 1)
+
+def BASE(src, path = None):
+   """
+########################################################################################
+# create and update BASE jail used for skeleton moedl
+#
+   """
+   jails = load_jail_config(jailconf)[0]
+# check FreeBSD version
+   hwplatform = subprocess.check_output(['uname', '-m']).strip('\n')
+   release =  subprocess.check_output(['uname', '-r'])[:4].strip('\n')
+
+# find base path
+   for i in jails:
+      if i['name'] == 'BASE':
+         path = i['path']
+         break
+
+   if path == None:
+      log(2, "'BASE' jail path was not found!")
+      return False
+
+# REMOVE BASE JAIL
+   if src == 'remove':
+       subprocess.call(['chflags', '-R', 'noschg', path])
+       subprocess.call(['rm', '-rf', '%s/*' % path])
+       log(1, "'BASE' jail was removed")
+       return True
+
+# INSTALL BASE JAIL
+# check new BASE path
+   if '/' not in path:
+      log(2, "'%s' is not a valid path!" % path)
+      return False
+
+   if path[-1] == '/':
+       path = path[:-1]
+
+   path = '%s/BASE' % path
+
+   if os.path.isdir('%s' % path) == True:
+       log(2, "'%s' already exists!" % path)
+       return False
+   else:
+      subprocess.call(['mkdir', '-p', '%s' % path])
+      log(0, "'%s' was created!" % path)
+
+# install from bsd.txz files
+   if src == 'bsd':
+# needed files
+      sources = ['base.txz']
+      if hwplatform == 'amd64':
+         sources.append('lib32.txz')
+# check if we have all needed source files
+      if os.path.exists("/usr/freebsd-dist") == False:
+          subprocess.call(['mkdir', '-p','/usr/freebsd-dist'])
+
+# install BASE from bsd txz
+      for s in sources:
+         if os.path.exists("/usr/freebsd-dist/%s" % s) == False:
+            log(2, "'%s' cannot be found!" % s)
+# try to download freebsd src file if not exist
+            try:
+               log(0, "try to download '%s' from 'ftp.freebsd.org'!" % s)
+               ftp = ftplib.FTP("ftp.freebsd.org")
+               ftp.login()
+               ftp.cwd("/pub/FreeBSD/releases/%s/%s-RELEASE/" % (hwplatform, release))
+               ftp.retrbinary("RETR %s" % s ,open('/usr/freebsd-dist/%s' % s, 'wb').write)
+               log(0, "'%s' was successful downloaded!" % s)
+               ftp.quit()
+            except:
+               log(2, "'%s' cannot be downloaded!" % s)
+               return False
+# extract freebsd src file
+         subprocess.call(['tar', '-xf', '/usr/freebsd-dist/%s' % s, '-C', path])
+         log(0, "'%s' was successful extracted in '%s'!" % (s, path))
+
+   if src == 'src':
+      try:
+         subprocess.call(['cd', '/usr/src', '&&', 'make', 'installworld', 'DESTDIR=%s' % path])
+         subprocess.call(['cd', '/usr/src', '&&', 'make', 'distribution', 'DESTDIR=%s' % path])
+      except:
+         log(2, "'BASE' cannot be installed from 'src'!")
+         return False
+
+# update jail.conf for BASE jail
+   basejail = {'name':'BASE', 'jid':0, '$jip':'n/a', '$jgw':'n/a', 'host.hostname':'n/a', 'vnet':0, 'install':'bsd', 'path':path}
+   update_jail_conf(['new_jail', basejail, 'create'])
+
+   log(0, "'BSD' jail was successful installed from '%s'!" % src)
+   return True
 
 ########################################################################################
 # MAIN MENU
@@ -1457,7 +1554,15 @@ class lcmd(cmd.Cmd):
    def do_create(self, arg):
       """ Create new jail
       """
-      jail_input()
+
+      arg = str(arg).split(' ')
+      arg = [i for i in arg if i != '']
+
+      if len(arg) > 2:
+         if arg[0] == 'BASE':
+            BASE(arg[1], arg[2])
+      else:
+         jail_input()
 
    def do_modify(self, arg):
        """ Modify jail
