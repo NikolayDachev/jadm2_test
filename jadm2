@@ -448,6 +448,9 @@ def jail_table(mcmd):
    if mcmd[0] == 'jls':
        lmen = ["FLAGS", "ACTIVE", "JID", "NAME", "HOSTNAME", "IP ADDRESS"]
 
+# sorte list by x[2] - jid
+   jlist = sorted(jlist, key=lambda x: x[2])
+# print table
    print tabulate(jlist, lmen)
 
 def bytesto(bytes, to, bsize=1024):
