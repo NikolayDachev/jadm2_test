@@ -1336,7 +1336,7 @@ def BASE(src, path = None):
 
 # REMOVE BASE JAIL
    if src == 'remove':
-       subprocess.call(['chflags', '-R', 'noschg', path])
+       subprocess.call(['chflags', '-R', '0', path])
        subprocess.call(['rm', '-rf', '%s/*' % path])
        log(1, "'BASE' jail was removed")
        return True
@@ -1398,11 +1398,38 @@ def BASE(src, path = None):
          log(2, "'BASE' cannot be installed from 'src'!")
          return False
 
+# create ports tree
+   log(0, 'fetch and create ports tree!')
+  # subprocess.call(['portsnap' ,'-p', '%s/usr/ports' % path, 'fetch', 'extract'])
+   subprocess.call(['mkdir', '-p', '%s/usr/ports' % path])
+# create SKELETON MODEL
+# http://www.freebsd.org/doc/en_US.ISO8859-1/books/handbook/jails-application.html
+   log(0, 'create SROOT and symlinks!')
+   os.chdir('%s' % path)
+   os.system('mkdir -p %s/SROOT/home %s/SROOT/usr-X11R6 %s/SROOT/distfiles %s/SROOT/usr-share-keys/pkg' % (path,  path, path, path))
+   os.system('mv %s/etc SROOT/' % path)
+   os.system('mv %s/usr/local SROOT/usr-local' % path)
+   os.system('mv %s/usr/share/keys SROOT/usr-share-keys' % path)
+   os.system('mv %s/tmp SROOT/' % path)
+   os.system('mv %s/var SROOT/' % path)
+   os.system('mv %s/root SROOT/' % path)
+   os.system('ln -s SROOT/etc etc')
+   os.system('ln -s SROOT/home home')
+   os.system('ln -s SROOT/root root')
+   os.system('ln -s /SROOT/usr-local usr/local')
+   os.system('ln -s /SROOT/usr-share-keys usr/share/keys')
+   os.system('ln -s /SROOT/usr-X11R6 usr/X11R6')
+   os.system('ln -s /SROOT/distfiles usr/ports/distfiles')
+   os.system('ln -s SROOT/tmp tmp')
+   os.system('ln -s SROOT/var var')
+# Create a generic /home/j/skel/etc/make.conf containing this line
+   os.system('echo  \"WRKDIRPREFIX?=  /SROOT/portbuild\"  > %s/etc/make.conf' % path)
+
 # update jail.conf for BASE jail
    basejail = {'name':'BASE', 'jid':0, '$jip':'n/a', '$jgw':'n/a', 'host.hostname':'n/a', 'vnet':0, 'install':'bsd', 'path':path}
    update_jail_conf(['new_jail', basejail, 'create'])
 
-   log(0, "'BSD' jail was successful installed from '%s'!" % src)
+   log(0, "'BASE' jail was successful installed from '%s'!" % src)
    return True
 
 ########################################################################################
