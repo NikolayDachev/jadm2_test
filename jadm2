@@ -452,6 +452,7 @@ def jail_table(mcmd):
    jlist = sorted(jlist, key=lambda x: x[2])
 # print table
    print tabulate(jlist, lmen)
+   return jlist
 
 def bytesto(bytes, to, bsize=1024):
    """
@@ -686,6 +687,10 @@ def update_jail_conf(update):
 
    if update[0] == 'rm_line':
       del jcl[update[1][0]]
+
+   if update[0] == 'rm_jail':
+      jail = update[1]
+      del jcl[jail['jbegin']:jail['jend'] + 1]
 
 # create jail in jails.conf format and update it!
    if update[0] == 'new_jail':
@@ -1073,7 +1078,11 @@ def check_jail_Setting(setting, val):
             return j
          if j['jid'] == val:
             return j
-      log(2, "'%s' is not existing jail!" % val)
+
+      if val == 'BASE':
+         return False
+
+      log(2, "'%s' is a not existing jail!" % val)
       return False
 
 # check if we can use name = val
@@ -1313,6 +1322,43 @@ def modify_jail(newjail):
 # jail completely modified
    log(0, "jail '%s' was successful modified!" % newjail['name'], 1)
 
+def jail_destroy(jailname, action = None, cli = None):
+   """
+########################################################################################
+#  Remove / Destroy existing jail
+#
+   """
+   jails = load_jail_config(jailconf)[0]
+
+# find jail
+   rmjail = check_jail_Setting('modify', jailname)
+   if rmjail == False:
+       return False
+
+   if cli == None:
+       yn = raw_input("will %s '%s' jail please confirm (y):> " % (action, rmjail['name']))
+       if 'y' not in yn:
+          log(0, 'user exit - !')
+          return False
+
+   if action == 'remove':
+       update_jail_conf(['rm_jail', rmjail])
+
+   if action == 'destroy':
+       try:
+          if rmjail['zfs'] != 0:
+              subprocess.call(['zfs', 'destroy', '-r', rmjail['zfs'][0]])
+
+          subprocess.call(['chflags', '-R', '0', rmjail['path']])
+          subprocess.call(['rm', '-rf', '%s' % rmjail['path']])
+          update_jail_conf(['rm_jail', rmjail])
+       except:
+          log(2, "jadm was not %s '%s' jail successful!" % (action, rmjail['name']), 1)
+          return False
+
+   log(1, "jadm %s '%s' jail successful!" % (action, rmjail['name']), 1)
+   return True
+
 def BASE(src, path = None):
    """
 ########################################################################################
@@ -1325,21 +1371,26 @@ def BASE(src, path = None):
    release =  subprocess.check_output(['uname', '-r'])[:4].strip('\n')
 
 # find base path
-   for i in jails:
-      if i['name'] == 'BASE':
-         path = i['path']
-         break
+   BASE = check_jail_Setting('modify', 'BASE')
 
-   if path == None:
-      log(2, "'BASE' jail path was not found!")
+# BASE ports
+   if src == 'ports':
+      if BASE == False:
+         log(2, "'BASE' jail not exist!")
+         return False
+      if path == 'install':
+         subprocess.call(['portsnap' ,'-p', '%s/usr/ports' % BASE['path'], 'fetch', 'extract'])
+         log(0, "'BASE' ports tree was istalled!")
+         return True
+      if path == 'update':
+         subprocess.call(['portsnap' ,'-p', '%s/usr/ports' % BASE['path'], 'fetch', 'update'])
+         log(0, "'BASE' ports tree was updated!")
+         return True
+
+# CHECK IF BASE exist before install
+   if BASE != False:
+      log(2, "'BASE' jail already exist!")
       return False
-
-# REMOVE BASE JAIL
-   if src == 'remove':
-       subprocess.call(['chflags', '-R', '0', path])
-       subprocess.call(['rm', '-rf', '%s/*' % path])
-       log(1, "'BASE' jail was removed")
-       return True
 
 # INSTALL BASE JAIL
 # check new BASE path
@@ -1398,9 +1449,7 @@ def BASE(src, path = None):
          log(2, "'BASE' cannot be installed from 'src'!")
          return False
 
-# create ports tree
-   log(0, 'fetch and create ports tree!')
-  # subprocess.call(['portsnap' ,'-p', '%s/usr/ports' % path, 'fetch', 'extract'])
+# create ports tree dir
    subprocess.call(['mkdir', '-p', '%s/usr/ports' % path])
 # create SKELETON MODEL
 # http://www.freebsd.org/doc/en_US.ISO8859-1/books/handbook/jails-application.html
@@ -1584,6 +1633,12 @@ class lcmd(cmd.Cmd):
 
    def do_create(self, arg):
       """ Create new jail
+       * BASE jail
+       - create new BASE jail    (usage: create BASE 'bsd/src' '/top/BASE/folder')
+       - install BASE ports tree (usage: create BASE ports install)
+       - update BASE  ports tree (usage: create BASE ports update)
+
+       * to create new jail (usage: create) without arguments
       """
 
       arg = str(arg).split(' ')
@@ -1607,6 +1662,18 @@ class lcmd(cmd.Cmd):
       else:
          completions = [ f for f in self.jails if f.startswith(text)]
          return completions
+
+   def do_destroy(self, arg):
+        """ Destroy jail and delete jail data/zfs
+        - usage: destroy 'name/jid'
+        """
+        jail_destroy(arg, 'destroy')
+
+   def do_remove(self, arg):
+        """ Remove jail but keep jail data/zfs
+        - usage: remove 'name/jid'
+        """
+        jail_destroy(arg, 'remove')
 
 
 def cli():
