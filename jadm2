@@ -244,13 +244,13 @@ def load_jail_config(conf_f):
 # is this zfs jail ?
          if x[0] == 'path':
 # if is SKEL jail will contain /mounts we don't need this
-             jail_dict['path'] = jail_dict['path'].replace('/mounts', '')
-             zfs_check = zfs(x[1])
+             jail_dict['path'] = jail_dict['path'].replace('/mnt', '')
+             zfs_check = zfs(jail_dict['path'])
              jail_dict['zfs'] = zfs_check[2]
 
 # is this SKELETON MODEL jail
          if x[0] == 'mount.fstab':
-            if '/rwdata/etc/fstab' in x[1]:
+            if '/rw/etc/fstab' in x[1]:
                jail_dict['SKEL'] = 1
 
 # check if jail is active/inactive or dying
@@ -701,8 +701,12 @@ def update_jail_conf(update):
                    'jid = %s;' % jail['jid'],
                    '$jip = "%s";' % jail['$jip'],
                    '$jgw = "%s";' % jail['$jgw'],
-                   'host.hostname = "%s";' % jail['host.hostname'],
-                   'path = "%s";' % jail['path'],]
+                   'host.hostname = "%s";' % jail['host.hostname']]
+# jail path add /mnt is this is skel jail
+      if jail['install'][0] == 'skel':
+         jail_conf.extend(['path = "%s/mnt";' % jail['path']])
+      else:
+         jail_conf.extend(['path = "%s";' % jail['path']])
 # jail networking
       if jail['vnet'] == 1:
          jail_conf.extend(['$bridge = "%s";' % jail['$bridge']])
@@ -711,7 +715,7 @@ def update_jail_conf(update):
          jail_conf.extend(net)
 # if this is skel jail
       if jail['install'][0] == 'skel':
-         jail_conf.extend(['### BASE mount settings ###', 'mount.fstab = %s/etc/fstab;' % jail['install'][1], 'mount.devfs;'])
+         jail_conf.extend(['### BASE mount settings ###', 'mount.fstab = %s/rw/etc/fstab;' % jail['path'], 'mount.devfs;'])
 
 # update jlc[]
       if update[2] == 'create':
@@ -1280,10 +1284,14 @@ def create_jail(newjail):
       if base == None:
           log(2, "'BASE' jail not exist!")
           return False
-
+# create skel jail
       subprocess.call(['mkdir', '-p', '%s/rw' % newjail['path']])
       subprocess.call(['mkdir', '-p', '%s/mnt' % newjail['path']])
       subprocess.call(['cp', '-R', '%s/SROOT/' % base['path'], '%s/rw' % newjail['path']])
+
+# create sekl jail fstab file
+      os.system('echo \"%s %s/mnt nullfs ro 0 0\" > %s/rw/etc/fstab' % (base['path'], newjail['path'], newjail['path']))
+      os.system('echo \"%s/rw %s/mnt/SROOT nullfs rw 0 0\" >> %s/rw/etc/fstab' % (newjail['path'], newjail['path'], newjail['path']))
 
    if newjail['install'][0] == 'template':
        print ''
@@ -1293,7 +1301,10 @@ def create_jail(newjail):
        log(0, "jail was installed from '%s'" % newjail['install'][0])
 
 # 4. do post install
-   jadm_postinstall(newjail['path'])
+   if newjail['install'][0] == 'skel':
+      jadm_postinstall('%s/rw' % newjail['path'])
+   else:
+      jadm_postinstall(newjail['path'])
 
 # 5. update jail.conf
    update_jail_conf(['new_jail', newjail, 'create'])
