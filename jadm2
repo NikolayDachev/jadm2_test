@@ -787,13 +787,13 @@ def jail_input(modify = None):
       if modjail['zfs'] == 0:
          modjail['zfs'] = ['none', 'none', 'none']
 #add empty 'install'
-      modjail['install'] =  ['']
+      modjail['install'] =  ['', '']
       acText = "Modify '%s'" % modjail['name']
       input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path']
       settings_menu = ['Jail', 'Setting', 'Old Setting']
 # copy jail settings when we modify them
       new_jail = modjail.copy()
-      new_jail['install'] = ['']
+      new_jail['install'] = ['', '']
 
    print "----------------------------------------------------"
    print "                %s Jail " % acText
@@ -1008,8 +1008,7 @@ def jail_input(modify = None):
              if check_jail_Setting(ikey, ekey) == False:
                  continue
              else:
-                 new_jail['install'] = [ekey]
-                 new_jail['install'].append(' ')
+                 new_jail['install'] = [ekey, ' ']
                  break
 
 # print existing jails table if we will use template for install
@@ -1032,13 +1031,14 @@ def jail_input(modify = None):
 # print settings before confirm
    while True:
       print " "
-      men_jail_settings = [['Install src:', '%s %s' % (new_jail['install'][0], new_jail['install'][1])],
-                           ['Name', new_jail['name'], modjail['name']],
+      men_jail_settings = [['Name', new_jail['name'], modjail['name']],
                            ['JID', new_jail['jid'], modjail['jid']],
                            ['Hostname', new_jail['host.hostname'], modjail['host.hostname']],
                            ['IP', new_jail['$jip'], modjail['$jip']],
                            ['Gateway', new_jail['$jgw'], modjail['$jgw']],
                            ['Path', new_jail['path'], modjail['path']]]
+      if modify == None:
+          men_jail_settings.append(['Install src:', '%s %s' % (new_jail['install'][0], new_jail['install'][1])])
       if new_jail['zfs'][0] != 'none':
           men_jail_settings.append(['Zfs', new_jail['zfs'][0], modjail['zfs'][0]])
           men_jail_settings.append(['Zfs Quota', new_jail['zfs'][1], modjail['zfs'][1]])
@@ -1084,10 +1084,8 @@ def check_jail_Setting(setting, val):
             return j
          if j['jid'] == val:
             return j
-
       if val == 'BASE':
          return False
-
       log(2, "'%s' is a not existing jail!" % val)
       return False
 
@@ -1101,6 +1099,9 @@ def check_jail_Setting(setting, val):
          return False
       if val == 'BASE':
          log(2, "'BASE' cannot be used for jail name!")
+         return False
+      if val in [' ', '', ' ']:
+         log(2, "jail name cannot be empty!")
          return False
 
 # check if we can use id = val
