@@ -694,7 +694,7 @@ def update_jail_conf(update):
 
 # create jail in jails.conf format and update it!
    if update[0] == 'new_jail':
-      jail = update[1]
+      jail = update[1][0]
       jail_conf = [' ', jail['name'],
                    '{',
                    '# %s ' % dt,
@@ -723,11 +723,11 @@ def update_jail_conf(update):
          jcl.extend(jail_conf)
 
       if update[2] == 'modify':
-         for i in jails:
-             if i['name'] == jail['name']:
-                jail_conf.extend(['#@# local settings #@#', i['local_settings'],'}'])
-                del jcl[i['jbegin']:i['jend']]
-                jcl.insert('jbegin', jail_conf)
+         oldjail = update[1][1]
+
+         jail_conf.extend(['#@# local settings #@#', oldjail['local_settings'],'}'])
+         del jcl[oldjail['jbegin']:oldjail['jend'] + 1]
+         jcl.insert(oldjail['jbegin'], jail_conf)
 # print info
       log(0, "jail.conf was updated for '%s'" % jail['name'])
 
@@ -1331,7 +1331,7 @@ def create_jail(newjail):
       jadm_postinstall(newjail['path'])
 
 # 5. update jail.conf
-   update_jail_conf(['new_jail', newjail, 'create'])
+   update_jail_conf(['new_jail', [newjail], 'create'])
 
 # 6. jail completely installed
    log(0, "new jail '%s' was successful created!" % newjail['name'], 1)
@@ -1349,10 +1349,21 @@ def modify_jail(newjail):
        if i['name'] == newjail['modify']:
            modjail = i
            break
+# if this jail i running
+   if modjail['active'] == 1:
+       log(2, "jail '%s' is running!" % modjail['name'])
+       return False
 
-   print "new jail: %s" % newjail
-   print "org jail: %s" % modjail
-   pass
+# if this is zfs and we changeit
+   if newjail['zfs'] != modjail['zfs']:
+       print "change zfs"
+# if we change the path
+   if newjail['path'] != modjail['path']:
+       subprocess.call(['mv', '-f',modjail['path'], newjail['path']])
+       log(0, "jail path '%s' was modified to '%s'!" % (modjail['path'], newjail['path']))
+
+# update jail.conf
+   update_jail_conf(['new_jail', [newjail, modjail], 'modify'])
 
 # jail completely modified
    log(0, "jail '%s' was successful modified!" % newjail['name'], 1)
