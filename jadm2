@@ -1522,7 +1522,7 @@ def BASE(src, path = None):
 
 # update jail.conf for BASE jail
    basejail = {'name':'BASE', 'jid':0, '$jip':'n/a', '$jgw':'n/a', 'host.hostname':'n/a', 'vnet':0, 'install':'bsd', 'path':path}
-   update_jail_conf(['new_jail', basejail, 'create'])
+   update_jail_conf(['new_jail', [basejail], 'create'])
 
    log(0, "'BASE' jail was successful installed from '%s'!" % src)
    return True
