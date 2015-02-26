@@ -1009,6 +1009,7 @@ def jail_input(modify = None):
                  continue
              else:
                  new_jail['install'] = [ekey]
+                 new_jail['install'].append(' ')
                  break
 
 # print existing jails table if we will use template for install
@@ -1025,13 +1026,14 @@ def jail_input(modify = None):
          if template == False:
             continue
          else:
-            new_jail['install'].append(template)
+            new_jail['install'][1] = template
             break
 
 # print settings before confirm
    while True:
       print " "
-      men_jail_settings = [['Name', new_jail['name'], modjail['name']],
+      men_jail_settings = [['Install src:', '%s %s' % (new_jail['install'][0], new_jail['install'][1])],
+                           ['Name', new_jail['name'], modjail['name']],
                            ['JID', new_jail['jid'], modjail['jid']],
                            ['Hostname', new_jail['host.hostname'], modjail['host.hostname']],
                            ['IP', new_jail['$jip'], modjail['$jip']],
@@ -1241,7 +1243,11 @@ def check_jail_Setting(setting, val):
    if setting == 'template':
       for j in jails:
          if val in j.values():
-             return j['name']
+             if j['active'] == 0:
+                return j['name']
+             else:
+                log(2, "'%s' is running and cannot be used as template" % j['name'])
+                return False
       log(2, "'%s' is not existing jail!" % val)
       return False
 
@@ -1294,7 +1300,24 @@ def create_jail(newjail):
       os.system('echo \"%s/rw %s/mnt/SROOT nullfs rw 0 0\" >> %s/rw/etc/fstab' % (newjail['path'], newjail['path'], newjail['path']))
 
    if newjail['install'][0] == 'template':
-       print ''
+# 1 find template
+       template = check_jail_Setting('modify', newjail['install'][1])
+# 2. template copy data
+       subprocess.call(['cp', '-R', '%s/' % template['path'], '%s/' % newjail['path']])
+# 3. check if our template is skeleton jail
+       if 'SKEL' in template.keys():
+         log(0, "template: '%s' is a skeleton model jail! " % newjail['install'][1])
+         for i in jails:
+            if i['name'] == 'BASE':
+               base = i
+               break
+         if base == None:
+            log(2, "'BASE' jail not exist!")
+            return False
+# create sekl jail fstab file
+         os.system('echo \"%s %s/mnt nullfs ro 0 0\" > %s/rw/etc/fstab' % (base['path'], newjail['path'], newjail['path']))
+         os.system('echo \"%s/rw %s/mnt/SROOT nullfs rw 0 0\" >> %s/rw/etc/fstab' % (newjail['path'], newjail['path'], newjail['path']))
+         newjail['install'][0] = 'skel'
        log(0, "jail was installed from template:' %s' " % newjail['install'][1])
    else:
        print " "
