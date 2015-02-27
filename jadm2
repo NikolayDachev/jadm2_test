@@ -650,13 +650,18 @@ def locals(j = None, action = None, setting = None):
               ls_position = jail['local_settings'][-1][0]
           update_jail_conf(['insert_line', [ls_position, '%s;' % setting]])
           log(0, "'%s' local setting was added to '%s' jail!" % (setting, jail['name']), 1)
-
+# update local jail /etc/jail.conf
+# ljail = jail['name']
+          update_local_jail_conf(jail['name'])
 # remove existing jail local setting
    elif action == 'remove':
       try:
          rmset = jail['local_settings'].pop(int(setting))
          update_jail_conf(['rm_line', [rmset[0] - 1]])
          log(1, "'%s' local setting was removed from '%s' jail!" % (rmset[1], jail['name']), 1)
+# update local jail /etc/jail.conf
+# ljail = jail['name']
+         update_local_jail_conf(jail['name'])
       except:
          print tabulate(ls, lmen)
          log(2, "'%s' is not a '%s' jail local setting number!" % (setting, jail['name']))
@@ -673,6 +678,8 @@ def update_jail_conf(update):
    """
    jails = load_jail_config(jailconf)[0]
    dt = str(datetime.now())
+# make a backup
+   subprocess.call(['cp', '-f', jailconf, '/tmp/jail.conf.jadm_bck'])
 
 # open jail.conf
    jc = open(jailconf, 'r')
@@ -695,6 +702,7 @@ def update_jail_conf(update):
 # create jail in jails.conf format and update it!
    if update[0] == 'new_jail':
       jail = update[1][0]
+      ljail = jail['name']
       jail_conf = [' ', jail['name'],
                    '{',
                    '# %s ' % dt,
@@ -732,10 +740,19 @@ def update_jail_conf(update):
       log(0, "jail.conf was updated for '%s'" % jail['name'])
 
 # close jail.conf
+   jcl = cleanlist(jcl)
+   jcl = [x for x in jcl if x not in [' ', '', '    ']]
    jc = open(jailconf, 'w')
-   jc.write('\n'.join(jcl))
+   for i in jcl:
+       jc.write("%s\n" % i)
+       if i == '}':
+          jc.write("\n")
    jc.close()
 
+# update local jail /etc/jail.conf
+# ljail = jail['name']
+   if update[0] == 'new_jail':
+      update_local_jail_conf(ljail)
 
 def update_local_jail_conf(jail):
    """
@@ -745,19 +762,50 @@ def update_local_jail_conf(jail):
    """
    jails = load_jail_config(jailconf)[0]
    for i in jails:
-       if i == jail:
+       if i['name'] == jail:
+           jail = i
+
    dt = str(datetime.now())
    jconf = '%s/etc/jail.conf' % jail['path']
-
-   if  jail['SKEL'] == 1:
+   if 'SKEL' in jail.keys():
        jconf = '%s/rw/etc/jail.conf' % jail['path']
 
-   jc = open(jail, 'w')
-   jc.write('\n'.join(jcl))
+   jail_conf = [' ', jail['name'],
+                   '{',
+                   '# %s ' % dt,
+                   'jid = %s;' % jail['jid'],
+                   '$jip = "%s";' % jail['$jip'],
+                   '$jgw = "%s";' % jail['$jgw'],
+                   'host.hostname = "%s";' % jail['host.hostname']]
+# jail path add /mnt is this is skel jail
+   if 'SKEL' in jail.keys():
+         jail_conf.extend(['path = "%s/mnt";' % jail['path']])
+   else:
+         jail_conf.extend(['path = "%s";' % jail['path']])
+# jail networking
+   if 'vnet' in jail.keys():
+         jail_conf.extend(['$bridge = "%s";' % jail['$bridge']])
+         jail_conf.extend(vnet)
+   else:
+         jail_conf.extend(net)
+# if this is skel jail
+   if 'SKEL' in jail.keys():
+         jail_conf.extend(['### BASE mount settings ###', 'mount.fstab = %s/rw/etc/fstab;' % jail['path'], 'mount.devfs;'])
+
+# add local settings
+   jail_conf.extend(['#@# local settings #@#'])
+   for i in jail['local_settings']:
+       if i != None:
+          jail_conf.append('%s;' % i[1])
+# end of jconf
+   jail_conf.append('}')
+
+   jc = open(jconf, 'w')
+   for i in jail_conf:
+       jc.write("%s\n" % i)
    jc.close()
 
-
-
+   log(0, "'%s' was updated!" % jconf)
 
 def log(ltype, msg, logit = None):
    """
@@ -1433,6 +1481,10 @@ def BASE(src, path = None):
 # create and update BASE jail used for skeleton moedl
 #
    """
+   if src not in ['bsd', 'src', 'ports', 'sources']:
+       log(2, "'%s' is not a valid 'create BASE' option" % src)
+       return False
+
    jails = load_jail_config(jailconf)[0]
 # check FreeBSD version
    hwplatform = subprocess.check_output(['uname', '-m']).strip('\n')
