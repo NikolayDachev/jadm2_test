@@ -733,9 +733,17 @@ def update_jail_conf(update):
       if update[2] == 'modify':
          oldjail = update[1][1]
 
-         jail_conf.extend(['#@# local settings #@#', oldjail['local_settings'],'}'])
+         jail_conf.extend(['#@# local settings #@#'])
+         for i in oldjail['local_settings']:
+            if i != None:
+               jail_conf.append('%s;' % i[1])
+         jail_conf.append('}')
+
          del jcl[oldjail['jbegin']:oldjail['jend'] + 1]
-         jcl.insert(oldjail['jbegin'], jail_conf)
+         lnum = oldjail['jbegin']
+         for i in jail_conf:
+            jcl.insert(lnum, i)
+            lnum += 1
 # print info
       log(0, "jail.conf was updated for '%s'" % jail['name'])
 
@@ -1438,6 +1446,45 @@ def modify_jail(newjail):
 # jail completely modified
    log(0, "jail '%s' was successful modified!" % newjail['name'], 1)
 
+def import_jail(jpath):
+   """
+########################################################################################
+#  import existing jail
+#  check if japth folder exist and if we have /jpath/etc/jail.conf
+   """
+   jails = load_jail_config(jailconf)[0]
+
+   if os.path.isdir(jpath) == False:
+       log(2, "'%s' not valid path!" % jpath)
+       return False
+
+   i_jconf = '%s/etc/jail.conf' % jpath
+   if os.path.isdir('%s/rw' % jpath) == True:
+       i_jconf = '%s/rw/etc/jail.conf' % jpath
+
+   if os.path.isfile(i_jconf) == False:
+        log(2, "'%s/etc/jail.conf' cannot be found!" % jpath)
+        return False
+
+   i_jail = load_jail_config(i_jconf)[0][0]
+   i_jail['install'] = ['n/a']
+   if os.path.isdir('%s/rw' % jpath) == True:
+       i_jail['install'] = ['skel']
+
+   i_jail['path'] = jpath
+
+   for x in jails:
+       for y in ['name', 'jid', '$jip', 'path']:
+          if x[y] == i_jail[y]:
+             log(2, "jail with %s '%s' already exist (jail: %s) !" % (y, i_jail[y], x['name']))
+             return False
+
+   if 'vnet' not in i_jail.keys():
+       i_jail['vnet'] = 0
+
+   update_jail_conf(['new_jail', [i_jail], 'create'])
+   log(0, "jail '%s' was successful imported!" % i_jail['name'], 1)
+
 def jail_destroy(jailname, action = None, cli = None):
    """
 ########################################################################################
@@ -1758,15 +1805,22 @@ class lcmd(cmd.Cmd):
        - install BASE ports tree (usage: create BASE ports install)
        - update BASE  ports tree (usage: create BASE ports update)
 
+       * Import existing 'jadm' jail
+       - usage: create /exsiting/jail/rootpath
+
        * to create new jail (usage: create) without arguments
       """
 
       arg = str(arg).split(' ')
       arg = [i for i in arg if i != '']
 
-      if len(arg) > 2:
+      if len(arg) >= 1:
          if arg[0] == 'BASE':
             BASE(arg[1], arg[2])
+         elif arg[0][0] == '/':
+            import_jail(arg[0])
+         else:
+            pass
       else:
          jail_input()
 
