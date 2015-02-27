@@ -722,7 +722,7 @@ def update_jail_conf(update):
       else:
          jail_conf.extend(net)
 # if this is skel jail
-      if jail['install'][0] == 'skel':
+      if jail['install'][0] == 'skel' or jail['SKEL'] == 1:
          jail_conf.extend(['### BASE mount settings ###', 'mount.fstab = %s/rw/etc/fstab;' % jail['path'], 'mount.devfs;'])
 
 # update jlc[]
