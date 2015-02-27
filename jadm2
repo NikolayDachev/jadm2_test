@@ -736,7 +736,29 @@ def update_jail_conf(update):
    jc.write('\n'.join(jcl))
    jc.close()
 
- 
+
+def update_local_jail_conf(jail):
+   """
+########################################################################################
+#  keep local /jail_paht/etc/jail.conf up to date
+#
+   """
+   jails = load_jail_config(jailconf)[0]
+   for i in jails:
+       if i == jail:
+   dt = str(datetime.now())
+   jconf = '%s/etc/jail.conf' % jail['path']
+
+   if  jail['SKEL'] == 1:
+       jconf = '%s/rw/etc/jail.conf' % jail['path']
+
+   jc = open(jail, 'w')
+   jc.write('\n'.join(jcl))
+   jc.close()
+
+
+
+
 def log(ltype, msg, logit = None):
    """
 ########################################################################################
