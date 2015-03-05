@@ -515,12 +515,12 @@ def gateways(gwtable = None):
             bridges.append({'name':i, 'addr':x})
 
 # append os system default gateway
-   system = subprocess.check_output('route get default', shell=True)
+   system = subprocess.check_output('netstat -nr', shell=True)
    system = system.split('\n')
    for i in system:
-      i = i.split(':')
-      if 'gateway' in i[0]:
-         bridges.append({'name':'system', 'addr':{'addr':i[1].replace(' ', ''), 'broadcast':'', 'netmask':'' }})
+      i = i.split(' ')
+      if 'default' in i[0]:
+         bridges.append({'name':'system', 'addr':{'addr':i[12].replace(' ', ''), 'broadcast':'', 'netmask':'' }})
 
 # make final list TO BE FIXED
    gwlist = []
@@ -722,7 +722,7 @@ def update_jail_conf(update):
       else:
          jail_conf.extend(net)
 # if this is skel jail
-      if jail['install'][0] == 'skel' or jail['SKEL'] == 1:
+      if jail['install'][0] == 'skel':
          jail_conf.extend(['### BASE mount settings ###', 'mount.fstab = %s/rw/etc/fstab;' % jail['path'], 'mount.devfs;'])
 
 # update jlc[]
@@ -899,33 +899,22 @@ def jail_input(modify = None):
                      yn_prompt = 'is not vnet'
                  cr_prompt = yn_prompt
 
-              if ikey == 'zfs':
-                 if modjail['zfs'][0] != 'none':
-                     ekey = 'y'
-                     break
-                 else:
-                     ekey = 'n/a'
-                     break
-
               prompt = "(%s) :> " % cr_prompt
               if ikey in ['vnet']:
                  ekey = raw_input("is %s jail (y/n) %s" % (ikey, prompt))
               else:
-                 ekey = raw_input('enter jail %s %s' % (ikey, prompt))
+                 if ikey == 'zfs':
+                    if modjail['zfs'][0] != 'none':
+                       ekey = 'y'
+                    else:
+                       ekey = 'n/a'
+                 else:
+                    ekey = raw_input('enter jail %s %s' % (ikey, prompt))
 # if new settings == old settings
               if ekey in ['', ' ', '   ']:
                  if ikey == 'vnet':
                      if modjail['vnet'] == 1:
                         ekey = 'y'
-
-#                 elif ikey == 'zfs':
-#                    if modjail['zfs'][0] != 'none':
-#                        ekey = 'y'
-#                 elif ikey == 'ip':
-#                    if new_jail['vnet'] == 1:
-#                       ekey = modjail['$jip'][:-3]
-#                    else:
-#                       ekey = modjail['$jip']
                  else:
                     new_jail[jindex] == ekey
                     break
@@ -1012,8 +1001,6 @@ def jail_input(modify = None):
 # if we modify exsiting jail
                     if modify != None:
                         ezfs = raw_input("enter zfs root (%s) :> " % modjail['zfs'][0])
-                        if ezfs in ['', ' ', '   ']:
-                            ezfs = modjail['zfs'][0]
                     else:
                         ezfs = raw_input("enter zfs root %s" % prompt)
 # exit
@@ -1441,11 +1428,12 @@ def modify_jail(newjail):
 
 # if this is zfs and we changeit
    move_zfs_path = 0
-   if newjail['zfs'] != modjail['zfs']:
+   if modjail['zfs'] != 0:
       if newjail['zfs'][0] != modjail['zfs'][0]:
          subprocess.call(['zfs', 'rename', '%s' % modjail['zfs'][0], '%s' % newjail['zfs'][0]])
          subprocess.call(['zfs', 'set', 'mountpoint=%s' % newjail['path'], '%s' % newjail['zfs'][0]])
-         subprocess.call(['rm', '-rf', '%s' % modjail['path']])
+         if newjail['path'] != modjail['path']:
+            subprocess.call(['rm', '-rf', '%s' % modjail['path']])
          move_zfs_path = 1
          log(0 ,"jail zfs '%s' was rename to %s" % (modjail['zfs'][0], newjail['zfs'][0]))
 
