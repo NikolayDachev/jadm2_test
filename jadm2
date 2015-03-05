@@ -915,6 +915,7 @@ def jail_input(modify = None):
                  if ikey == 'vnet':
                      if modjail['vnet'] == 1:
                         ekey = 'y'
+
                  else:
                     new_jail[jindex] == ekey
                     break
@@ -1015,15 +1016,17 @@ def jail_input(modify = None):
                                 y = x[1].split('=')
                                 ezfs = y[1][2:-7]
                                 log(0, "global path found - '%s' will be used!" % ezfs)
+
                     if ezfs == '':
                        break
+
                     ezfs_check = check_jail_Setting(ikey, ezfs)
                     if ezfs_check == False:
                        continue
                     else:
                        new_jail['zfs'][0] = '%s/%s' % (ezfs, new_jail['name'])
 # use zfs quota -----------
-                       while True:
+                 while True:
 # if we modify exsiting jail
                           if modify != None:
                              zquota = raw_input("enter zfs quota (%s) :> " % modjail['zfs'][-2])
@@ -1044,7 +1047,7 @@ def jail_input(modify = None):
                              new_jail['zfs'][1] = zquota
                              break
 # use zfs quota -----------
-                       break
+                 break
               break
 # enter jail path
            if ikey == 'path':
