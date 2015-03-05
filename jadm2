@@ -901,13 +901,14 @@ def jail_input(modify = None):
 
               if ikey == 'zfs':
                  if modjail['zfs'][0] != 'none':
-                     yn_prompt = 'is zfs'
+                     ekey = 'y'
+                     break
                  else:
-                     yn_prompt = 'is not zfs'
-                 cr_prompt = yn_prompt
-              prompt = "(%s) :> " % cr_prompt
+                     ekey = 'n/a'
+                     break
 
-              if ikey in ['vnet', 'zfs']:
+              prompt = "(%s) :> " % cr_prompt
+              if ikey in ['vnet']:
                  ekey = raw_input("is %s jail (y/n) %s" % (ikey, prompt))
               else:
                  ekey = raw_input('enter jail %s %s' % (ikey, prompt))
@@ -916,14 +917,15 @@ def jail_input(modify = None):
                  if ikey == 'vnet':
                      if modjail['vnet'] == 1:
                         ekey = 'y'
-                 elif ikey == 'zfs':
-                    if modjail['zfs'][0] != 'none':
-                        ekey = 'y'
-                 elif ikey == 'ip':
-                    if new_jail['vnet'] == 1:
-                       ekey = modjail['$jip'][:-3]
-                    else:
-                       ekey = modjail['$jip']
+
+#                 elif ikey == 'zfs':
+#                    if modjail['zfs'][0] != 'none':
+#                        ekey = 'y'
+#                 elif ikey == 'ip':
+#                    if new_jail['vnet'] == 1:
+#                       ekey = modjail['$jip'][:-3]
+#                    else:
+#                       ekey = modjail['$jip']
                  else:
                     new_jail[jindex] == ekey
                     break
@@ -994,7 +996,7 @@ def jail_input(modify = None):
                  break
 # enter ip address already 
            if ikey == 'ip':
-              ip = check_jail_Setting(ikey, [ekey, new_jail])
+              ip = check_jail_Setting(ikey, [ekey, new_jail, modjail])
               if ip == False:
                  continue
               else:
@@ -1070,6 +1072,9 @@ def jail_input(modify = None):
               if ekey == '':
                  log(2, " not valid path!")
                  continue
+# jail path = /root path/jail name
+              ekey = '%s/%s' % (ekey, new_jail['name'])
+
               if check_jail_Setting(ikey, ekey) == False:
                  continue
               else:
@@ -1225,8 +1230,14 @@ def check_jail_Setting(setting, val):
    if setting == 'ip':
 #  create ip list
       jip = val[0].split(',')
+      mjip = val[1]['$jip'].split(',')
+
       for ip in jip:
          ip = ip.replace(' ', '')
+# check if mod ip is the same
+         if ip in mjip:
+            continue
+
          if ch_ipv4(ip) == False:
             log(2, "'%s' is not a valid ip address!" % (ip))
             return False
@@ -1235,12 +1246,8 @@ def check_jail_Setting(setting, val):
             exjip = j['$jip'].split(',')
             for i in exjip:
                if ip == i:
-# nasty check modify ip if new ip = old ip :(
-                  if val[1]['name'] == j['name']:
-                     pass
-                  else:
-                     log(2, "'%s' ip address is used by '%s' jail!" % (ip, j['name']))
-                     return False
+                  log(2, "'%s' ip address is used by '%s' jail!" % (ip, j['name']))
+                  return False
 # check is we use vnet
          if val[1]['$jgw'] != 'system':
             br_network = bridge_network_check(ip, val[1]['$jgw'], val[1]['gwnetmask'])
@@ -1433,12 +1440,28 @@ def modify_jail(newjail):
        return False
 
 # if this is zfs and we changeit
+   move_zfs_path = 0
    if newjail['zfs'] != modjail['zfs']:
-       print "change zfs"
+      if newjail['zfs'][0] != modjail['zfs'][0]:
+         subprocess.call(['zfs', 'rename', '%s' % modjail['zfs'][0], '%s' % newjail['zfs'][0]])
+         subprocess.call(['zfs', 'set', 'mountpoint=%s' % newjail['path'], '%s' % newjail['zfs'][0]])
+         subprocess.call(['rm', '-rf', '%s' % modjail['path']])
+         move_zfs_path = 1
+         log(0 ,"jail zfs '%s' was rename to %s" % (modjail['zfs'][0], newjail['zfs'][0]))
+
+      if newjail['zfs'][1] != modjail['zfs'][1]:
+          subprocess.call(['zfs', 'set', 'quota=%s' % newjail['zfs'][1], '%s' % newjail['zfs'][0]])
+          log(0 ,"jail zfs quota '%s' was set for '%s'" % (newjail['zfs'][1], newjail['zfs'][0]))
+
 # if we change the path
-   if newjail['path'] != modjail['path']:
-       subprocess.call(['mv', '-f',modjail['path'], newjail['path']])
-       log(0, "jail path '%s' was modified to '%s'!" % (modjail['path'], newjail['path']))
+   if move_zfs_path == 0:
+      if newjail['path'] != modjail['path']:
+         subprocess.call(['mv', '-f',modjail['path'], newjail['path']])
+         log(0, "jail path '%s' was modified to '%s'!" % (modjail['path'], newjail['path']))
+
+# if we modify skeleton jail
+   if 'SKEL' in newjail.keys():
+      newjail['install'][0] = 'skel'
 
 # update jail.conf
    update_jail_conf(['new_jail', [newjail, modjail], 'modify'])
