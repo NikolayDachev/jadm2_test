@@ -1019,7 +1019,7 @@ def jail_input(modify = None):
 
                     if ezfs == '':
                        break
-
+                    print  new_jail['zfs'][0], modjail['zfs'][0]
                     ezfs_check = check_jail_Setting(ikey, ezfs)
                     if ezfs_check == False:
                        continue
