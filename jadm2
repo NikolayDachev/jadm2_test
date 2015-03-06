@@ -1002,8 +1002,13 @@ def jail_input(modify = None):
 # if we modify exsiting jail
                     if modify != None:
                         ezfs = raw_input("enter zfs root (%s) :> " % modjail['zfs'][0])
+                        if ezfs in ['', ' ', '   ']:
+                           new_jail['zfs'][0] = modjail['zfs'][0]
+                           break
                     else:
                         ezfs = raw_input("enter zfs root %s" % prompt)
+                        if ezfs in ['', ' ', '   ']:
+                            continue
 # exit
                     if '!' in ezfs:
                        log(0, 'user exit - !')
@@ -1017,14 +1022,13 @@ def jail_input(modify = None):
                                 ezfs = y[1][2:-7]
                                 log(0, "global path found - '%s' will be used!" % ezfs)
 
-                    if ezfs == '':
-                       break
                     print  new_jail['zfs'][0], modjail['zfs'][0]
-                    ezfs_check = check_jail_Setting(ikey, ezfs)
+                    ezfs_check = check_jail_Setting(ikey, '%s/%s' % (ezfs, new_jail['name']))
                     if ezfs_check == False:
                        continue
                     else:
                        new_jail['zfs'][0] = '%s/%s' % (ezfs, new_jail['name'])
+                       break
 # use zfs quota -----------
                  while True:
 # if we modify exsiting jail
@@ -1262,12 +1266,14 @@ def check_jail_Setting(setting, val):
                subprocess.check_call('zfs create %s' % val, shell=True)
                subprocess.check_call('zfs set mountpoint=none  %s' % val, shell=True)
                log(0, "jail zfs root '%s' was created!" % val, 1)
-               return val
+               return True
             except subprocess.CalledProcessError:
                log(2, "'%s' cannot be created!" % val, 1)
                return False
          else:
             return False
+      else:
+         return True
 
 # check zfs quota
    if setting == 'zquota':
