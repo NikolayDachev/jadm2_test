@@ -63,8 +63,11 @@ jailconf = '/etc/jail.conf'
 # jadm log file
 logfile = '/var/log/jadm.log'
 
-# jadm don't show verbose output by defult
+# jadm don't show verbose output by default when start or stop jail
 verbose = 0
+
+# auto confirm when use cli
+autoc = 'n/a'
 
 # settings start index in jail.conf
 _Lsettings = '#@#localsettings#@#'
@@ -137,6 +140,10 @@ def load_jail_config(conf_f):
 #  '$jgw':'jail gateway','path':'jail home dir', 'vnet':'is this vnet jail', 'zfs':'is thi zfs jail', ... }
 #
    """
+# check if jail.conf exist
+   if os.path.isfile(conf_f) != True:
+      log(2, "'%s' not exist!" % conf_f)
+      sys.exit(2)
 # open jail.conf
    jc = open(conf_f, 'r')
 
@@ -174,18 +181,18 @@ def load_jail_config(conf_f):
 # find all jail.conf global settings (ignore # comments)
 # search jail.conf from 0 line to first jail{} line
    global_settings = []
-   gs_only = not_sorted_mas[0:mas.index(jsname[0][0])]
-
-   for i in gs_only:
-       if '#' in i:
-           pass
-       else:
+   if jsname != []:
+      gs_only = not_sorted_mas[0:mas.index(jsname[0][0])]
+      for i in gs_only:
+         if '#' in i:
+            pass
+         else:
 # global seting line number
-           x = not_sorted_mas.index(i)
+            x = not_sorted_mas.index(i)
 # glabal setting table format
-           i = i.strip(';').replace(' ', '')
-           if i:
-              global_settings.append([x, i])
+            i = i.strip(';').replace(' ', '')
+            if i:
+               global_settings.append([x, i])
 
 # Jails Configuration in dict format.
    jails = []
@@ -923,6 +930,10 @@ def jail_input(modify = None):
 # main prompt start here
               if ikey in ['vnet', 'zfs']:
                  ekey = raw_input("is %s jail (y/n) %s" % (ikey, prompt))
+                 if 'y' not in ekey:
+                     break
+              if ikey == 'path':
+                 ekey = raw_input('enter jail root %s %s' % (ikey, prompt))
               else:
                  ekey = raw_input('enter jail %s %s' % (ikey, prompt))
 # exit
@@ -1878,6 +1889,22 @@ class lcmd(cmd.Cmd):
         """
         jail_destroy(arg, 'remove')
 
+   def do_about(self, arg):
+       """ About JADM and license info
+       """
+       print about()
+
+   def do_exit(self, arg):
+        """ Exit from JADM
+        """
+        print "Good bye!"
+        sys.exit(0)
+
+   def do_quit(self, arg):
+        """ Exit from JADM
+        """
+        print "Good bye!"
+        sys.exit(0)
 
 def cli():
    """
@@ -1886,43 +1913,190 @@ def cli():
 #
    """
    if sys.argv[1] in ['-y', '-v', '-c', '-m', '-i']:
-
 # cli verbose mode for start/stop jail
-         if sys.argv[1] == '-v':
-            verbose = 1
-            # prtin and add to log file
-            logmsg = "      INFO: verbose mode enable"
-            log(logmsg)
+      if '-v' in sys.argv:
+         verbose = 1
+         log(0, "run/stop jail verbose mode enable!")
 
 # cli auto confirm
+      if '-y' in sys.argv:
+         autoc = 'y'
+         log(1, "auto confirm mode enable!")
 
-         if '-y' in sys.argv:
-            sys.argv[ sys.argv.index('-y')] = 'autoConfirm:yes'
-         else:
-             sys.argv.append('autoConfirm:no')
+# cli create or modify jail
+      if '-c' in sys.argv or '-m' in sys.argv:
+            if '-c' in sys.argv and '-m' in sys.argv:
+                log(2, "-(c)reate and -(m)odify cannot be used together!")
+                sys.exit(2)
 
-# cli create jail
-         if sys.argv[1] == '-c':
-            jail_create_cli(sys.argv)
+            jail_input_cli(sys.argv[1:])
             sys.exit(0)
-
-# cli modify jail
-         if sys.argv[1] == '-m':
-            print "jadm cli modify"
-            sys.exit(0)
-
 
 # cli jail - os info
-         if sys.argv[1] == '-i':
+      if sys.argv[1] == '-i':
             welcome()
             sys.exit(0)
 
-         jadmCommand = ' '.join(sys.argv[2:])
+      jadmCommand = ''
    else:
       jadmCommand = ' '.join(sys.argv[1:])
 
 # cli command
    lcmd().onecmd(jadmCommand)
+
+def jail_input_cli(cliargv):
+   """
+########################################################################################
+#  jadm command line interface input arguments for create_jail() and modify_jail()
+#
+   """
+   load_jails = load_jail_config(jailconf)
+   jails, gsettings = load_jails[0], load_jails[1]
+   jail = {}
+   modjial = {}
+   input_keys = ['name', 'id', 'hostname', 'ip', 'path', 'install']
+
+# pars all sys_argv arguments to jail config
+   for i in cliargv:
+       i = i.split(':')
+       if len(i) > 1:
+           jail[i[0]] = i[1:]
+
+# check if we have all needed arguments to create jail
+   if '-c' in cliargv:
+       for i in input_keys:
+           if i not in jail.keys():
+              log(2, "'%s' not in jail config!" % i)
+              sys.exit(2)
+
+# check if we have all needed arguments to modify jail
+   if '-m' in cliargv:
+       if 'name' not in jail.keys():
+          log(2, "jail name/jid was not specified!" % i)
+          sys.exit(2)
+
+# chceck if modify jail exist
+       modjail = check_jail_Setting('modify', jail['name'][0])
+       if modjail == False:
+          sys.exit(2)
+# fix if is not vnet
+       if 'vnet' not in modjail.keys():
+          modjail['vnet'] = ''
+# fix if is not 'zfs'
+       if modjail['zfs'] == 0:
+          modjail['zfs'] = ['none', 'none', 'none']
+#add empty 'install'
+       modjail['install'] = ['', '']
+       jail['install'] = ['', '']
+       print modjail
+
+       for i in jail.keys():
+          x = i
+          val = jail[x][0]
+          if i in ['ip', 'gw']:
+             i = '$j' + i
+          if i == '$jip':
+             val = [jail[x]]
+          if i == 'hostname':
+             i = 'host.' + i
+          if i == 'name':
+              if len(jail['name']) == 3:
+                  val = jail['name'][-1]
+              else:
+                  continue
+          if i in modjail.keys():
+             if jail[x] != modjail[i]:
+                if check_jail_Setting(x, val) == False:
+                   sys.exit(2)
+
+def welcome():
+   '''
+########################################################################################
+#       print welcome info on startup
+#
+   '''
+
+   jails = load_jail_config(jailconf)[0]
+
+   welmsg = '''
+FreeBSD jail framework with vnet, zfs and jail.conf support.
+Please check license agreement with "about"
+List available commands with "help" or detailed help with "help cmd".
+   '''
+
+   lmenu = ['FreeBSD', 'Hostname', 'Uptime', 'Jails', 'Active',  'JADM']
+
+   hostname = os.uname()[1]
+   opsys = os.uname()[2]
+# check how many jails we have
+# remove BASE jail if exist
+   jailNumbers = len(jails)
+   act = []
+   for i in jails:
+       if 'BASE' == i['name']:
+          jailNumbers = jailNumbers - 1
+# check actvie jails number
+       if i['active'] == 1:
+        act.append(a)
+   activeJails =  len(act)
+# check system uptime
+   proc = subprocess.Popen('uptime', stdout=subprocess.PIPE)
+   output = proc.stdout.read()
+   uptime = output.split(',')[0]
+   uptime = uptime.split('up')[1]
+   hostInfo = [[opsys,  hostname, uptime, jailNumbers, activeJails,  jadm_version]]
+   print ""
+   print "Welcome to JADM (jail admin) framework"
+   print ""
+   print tabulate(hostInfo, lmenu)
+   print welmsg
+
+   if jailNumbers <= 0:
+      log(2, "jadm cannot find any jail in '%s'" % jailconf, 1)
+      log(0, "you can try to format '%s' with 'jadm -update' command from os shell!" % jailconf)
+      log(0, "each jail in '%s' should be at leas in this format!" % jailconf)
+      print " \njailname \
+        \n{ \
+        \n...; \
+        \n} \n"
+
+def about():
+   """
+########################################################################################
+# Shouw creator information also jadm license
+#
+   """
+# return about string
+   about = ("""
+JADM %s
+-------------
+creator:  Nikolay Georgiev Dachev, <nikolay@dachev.info>
+support:  jadm@dachev.info (only for bugs report and jadm issues)
+
+Jadm is FreeBSD jail administration framework with jail.conf, vnet and zfs support.
+
+---------------- JADM is BSD 3-Clause Licensed ---------------------
+
+Copyright (c) <2015>, <Nikolay Georgiev Dachev> <nikolay@dachev.info>
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distr
+
+3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+""") % (jadm_version)
+   return about
+
 
 ########################################################################################
 # Start Jadm script
@@ -1933,6 +2107,7 @@ if len(sys.argv) > 1:
    cli()
 else:
 # main menu shell
+   welcome()
    lcmd().cmdloop()
 
 ########################################################################################
