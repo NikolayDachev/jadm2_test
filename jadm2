@@ -1022,8 +1022,7 @@ def jail_input(modify = None):
                                 ezfs = y[1][2:-7]
                                 log(0, "global path found - '%s' will be used!" % ezfs)
 
-                    print  new_jail['zfs'][0], modjail['zfs'][0]
-                    ezfs_check = check_jail_Setting(ikey, '%s/%s' % (ezfs, new_jail['name']))
+                    ezfs_check = check_jail_Setting(ikey, [ezfs, new_jail['name']])
                     if ezfs_check == False:
                        continue
                     else:
@@ -1045,6 +1044,8 @@ def jail_input(modify = None):
                           if  zquota in ['\n', '', ' ', '	']:
                              new_jail['zfs'][1] = 'none'
                              break
+                          if zquota == 'none':
+                              break
                           if  check_jail_Setting('zquota', zquota) == False:
                              continue
                           else:
@@ -1257,18 +1258,21 @@ def check_jail_Setting(setting, val):
 
 # check jail zfs root -----------------
    if setting == 'zfs':
-# get/create zfs 
-      if zfs(val)[2] != 1:
-         log(2, "'%s' zfs root not exist!" % val)
+# get/create zfs
+      if zfs('%s/%s' % (val[0], val[1]))[2] == 1:
+          log(2, "'%s/%s' already exist and cannot be used!" % (val[0], val[1]), 1)
+          return False
+      if zfs(val[0])[2] != 1:
+         log(2, "'%s' zfs root not exist!" % val[0])
          zfs_y = raw_input('create it now (y)?> ')
          if 'y' in zfs_y:
             try:
-               subprocess.check_call('zfs create %s' % val, shell=True)
-               subprocess.check_call('zfs set mountpoint=none  %s' % val, shell=True)
-               log(0, "jail zfs root '%s' was created!" % val, 1)
+               subprocess.check_call('zfs create %s' % val[0], shell=True)
+               subprocess.check_call('zfs set mountpoint=none  %s' % val[0], shell=True)
+               log(0, "jail zfs root '%s' was created!" % val[0], 1)
                return True
             except subprocess.CalledProcessError:
-               log(2, "'%s' cannot be created!" % val, 1)
+               log(2, "'%s' cannot be created!" % val[0], 1)
                return False
          else:
             return False
@@ -1438,13 +1442,18 @@ def modify_jail(newjail):
 # if this is zfs and we changeit
    move_zfs_path = 0
    if modjail['zfs'] != 0:
-      if newjail['zfs'][0] != modjail['zfs'][0]:
-         subprocess.call(['zfs', 'rename', '%s' % modjail['zfs'][0], '%s' % newjail['zfs'][0]])
-         subprocess.call(['zfs', 'set', 'mountpoint=%s' % newjail['path'], '%s' % newjail['zfs'][0]])
-         if newjail['path'] != modjail['path']:
-            subprocess.call(['rm', '-rf', '%s' % modjail['path']])
-         move_zfs_path = 1
+      move_zfs_path = 1
+      zfs_path = modjail['zfs'][0]
+
+      if newjail['zfs'][0] != zfs_path:
+         subprocess.call(['zfs', 'rename', '%s' % zfs_path, '%s' % newjail['zfs'][0]])
+         zfs_path = newjail['zfs'][0]
          log(0 ,"jail zfs '%s' was rename to %s" % (modjail['zfs'][0], newjail['zfs'][0]))
+
+      if newjail['path'] != modjail['path']:
+         subprocess.call(['zfs', 'set', 'mountpoint=%s' % newjail['path'], '%s' %  zfs_path])
+         subprocess.call(['rm', '-rf', '%s' % modjail['path']])
+         log(0, "jail path '%s' was modified to '%s'!" % (modjail['path'], newjail['path']))
 
       if newjail['zfs'][1] != modjail['zfs'][1]:
           subprocess.call(['zfs', 'set', 'quota=%s' % newjail['zfs'][1], '%s' % newjail['zfs'][0]])
