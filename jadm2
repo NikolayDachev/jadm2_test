@@ -1949,7 +1949,8 @@ def jail_input_cli(cliargv):
    new_jail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
            '$jgw':'system','path':'', 'zfs':['none', 'none', 'none'],
            'vnet':0, 'gwnetmask':''}
-   modjial = new_jail.copy()
+   modjail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
+               '$jgw':'','path':'', 'zfs':['', '', ''] }
    jail = {}
    input_keys = ['name', 'id', 'hostname', 'ip', 'path', 'install']
 
@@ -1990,7 +1991,7 @@ def jail_input_cli(cliargv):
 # check if we can see jail settings
    for i in jail.keys():
       if i == 'name':
-         if len(jail['name']) == 2:
+         if len(jail['name']) == 2 and '-c' not in cliargv:
             new_jail['name'] = jail['name'][1]
             if new_jail['name'] == modjail['name']:
                 continue
@@ -2031,10 +2032,7 @@ def jail_input_cli(cliargv):
       if i == 'ip':
           if '-m' in cliargv:
              if jail[i] == modjail['$jip']:
-                if modjail['$jgw'] != 'system':
-                   pass
-                else:
-                   continue
+                continue
 
           ip = check_jail_Setting(i, [jail['ip'], new_jail, modjail])
           if ip == False:
@@ -2046,14 +2044,37 @@ def jail_input_cli(cliargv):
                 new_jail['$jip'] = ip
 
       if i == 'hostname':
+          if '-m' in cliargv:
+             if jail[i] == modjail['host.hostname']:
+                continue
           if check_jail_Setting(i, jail[i]) == False:
               sys.exit(2)
+          else:
+              new_jail['host.hostname'] = jail[i]
+
       if i == 'path':
+          if '-m' in cliargv:
+             if jail[i] == modjail['path']:
+                continue
           if check_jail_Setting(i, jail[i]) == False:
               sys.exit(2)
+          else:
+              new_jail['path'] = jail[i]
+
       if i == 'zfs':
+          if '-m' in cliargv:
+             if jail[i] == modjail['zfs']:
+                continue
           if check_jail_Setting(i, jail[i]) == False:
               sys.exit(2)
+
+      if i == 'install':
+         if len(jail['install']) == 2 and '-m' not in cliargv:
+            new_jail['install'] = jail['install'][1]
+            if new_jail['install'] == modjail['install']:
+                continue
+         else:
+            new_jail['name'] = jail['name'][0]
 
    print jail
    print modjail
