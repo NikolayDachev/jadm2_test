@@ -2053,6 +2053,7 @@ def jail_input_cli(cliargv):
               new_jail['host.hostname'] = jail[i]
 
       if i == 'path':
+          jail[i] = "%s/%s" % (jail[i], jail['name'])
           if '-m' in cliargv:
              if jail[i] == modjail['path']:
                 continue
