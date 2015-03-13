@@ -858,7 +858,7 @@ def jail_input(modify = None):
       input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path', 'install src']
       settings_menu = ['Jail', 'Setting']
       new_jail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
-               '$jgw':'','path':'', 'zfs':['none', 'none', 'none']}
+               '$jgw':'system','path':'', 'zfs':['none', 'none', 'none'], 'vnet':0, 'gwnetmask':''}
       modjail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
                '$jgw':'','path':'', 'zfs':['', '', ''] }
    else:
@@ -878,7 +878,6 @@ def jail_input(modify = None):
       settings_menu = ['Jail', 'Setting', 'Old Setting']
 # copy jail settings when we modify them
       new_jail = modjail.copy()
-      new_jail['install'] = ['', '']
 
    print "----------------------------------------------------"
    print "                %s Jail " % acText
@@ -922,7 +921,6 @@ def jail_input(modify = None):
                  if ikey == 'vnet':
                      if modjail['vnet'] == 1:
                         ekey = 'y'
-
                  else:
                     new_jail[jindex] == ekey
                     break
@@ -990,11 +988,7 @@ def jail_input(modify = None):
                        new_jail['vnet'] = 1
                        break
                  break
-              else:
-                 new_jail['vnet'] = 0
-                 new_jail['$jgw'] = 'system'
-                 new_jail['gwnetmask'] = ''
-                 break
+
 # enter ip address already 
            if ikey == 'ip':
               ip = check_jail_Setting(ikey, [ekey, new_jail, modjail])
@@ -1952,8 +1946,11 @@ def jail_input_cli(cliargv):
    """
    load_jails = load_jail_config(jailconf)
    jails, gsettings = load_jails[0], load_jails[1]
+   new_jail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
+           '$jgw':'system','path':'', 'zfs':['none', 'none', 'none'],
+           'vnet':0, 'gwnetmask':''}
+   modjial = new_jail.copy()
    jail = {}
-   modjial = {}
    input_keys = ['name', 'id', 'hostname', 'ip', 'path', 'install']
 
 # pars all sys_argv arguments to jail config
@@ -1961,6 +1958,10 @@ def jail_input_cli(cliargv):
        i = i.split(':')
        if len(i) > 1:
            jail[i[0]] = i[1:]
+
+   if 'name' not in jail.keys() or len(jail['name']) > 2:
+      log(2, "jail name/jid was not specified correctly!" % i)
+      sys.exit(2)
 
 # check if we have all needed arguments to create jail
    if '-c' in cliargv:
@@ -1971,43 +1972,93 @@ def jail_input_cli(cliargv):
 
 # check if we have all needed arguments to modify jail
    if '-m' in cliargv:
-       if 'name' not in jail.keys():
-          log(2, "jail name/jid was not specified!" % i)
-          sys.exit(2)
-
 # chceck if modify jail exist
        modjail = check_jail_Setting('modify', jail['name'][0])
        if modjail == False:
           sys.exit(2)
+
 # fix if is not vnet
        if 'vnet' not in modjail.keys():
-          modjail['vnet'] = ''
+          modjail['vnet'] = 0
 # fix if is not 'zfs'
        if modjail['zfs'] == 0:
           modjail['zfs'] = ['none', 'none', 'none']
 #add empty 'install'
        modjail['install'] = ['', '']
-       jail['install'] = ['', '']
-       print modjail
+       new_jail = modjail.copy()
 
-       for i in jail.keys():
-          x = i
-          val = jail[x][0]
-          if i in ['ip', 'gw']:
-             i = '$j' + i
-          if i == '$jip':
-             val = [jail[x]]
-          if i == 'hostname':
-             i = 'host.' + i
-          if i == 'name':
-              if len(jail['name']) == 3:
-                  val = jail['name'][-1]
-              else:
-                  continue
-          if i in modjail.keys():
-             if jail[x] != modjail[i]:
-                if check_jail_Setting(x, val) == False:
-                   sys.exit(2)
+# check if we can see jail settings
+   for i in jail.keys():
+      if i == 'name':
+         if len(jail['name']) == 2:
+            new_jail['name'] = jail['name'][1]
+            if new_jail['name'] == modjail['name']:
+                continue
+         else:
+            new_jail['name'] = jail['name'][0]
+
+         if check_jail_Setting(i, new_jail[i]) == False:
+             sys.exit(2)
+      else:
+         jail[i] = jail[i][0]
+
+
+      if i == 'id':
+          if '-m' in cliargv:
+             if jail[i] == modjail['jid']:
+                continue
+          if check_jail_Setting(i, jail[i]) == False:
+              sys.exit(2)
+          else:
+              new_jail['jid'] = jail[i]
+
+      if i == 'vnet':
+          if '-m' in cliargv:
+             if jail[i] == modjail['$jgw']:
+                continue
+          gws = gateways()
+          find_gw = check_jail_Setting(i, [jail[i], gws])
+          if find_gw == False:
+             gateways('table')
+             sys.exit(2)
+          else:
+             new_jail['$jgw'] = find_gw[0]
+             new_jail['$bridge'] = find_gw[1]
+             new_jail['gwnetmask']= find_gw[2]
+             new_jail['vnet'] = 1
+
+
+      if i == 'ip':
+          if '-m' in cliargv:
+             if jail[i] == modjail['$jip']:
+                if modjail['$jgw'] != 'system':
+                   pass
+                else:
+                   continue
+
+          ip = check_jail_Setting(i, [jail['ip'], new_jail, modjail])
+          if ip == False:
+             sys.exit(2)
+          else:
+             if ip == modjail['$jip'][:-3]:
+                new_jail['$jip'] = '%s%s' % (ip, modjail['$jip'][-3:])
+             else:
+                new_jail['$jip'] = ip
+
+      if i == 'hostname':
+          if check_jail_Setting(i, jail[i]) == False:
+              sys.exit(2)
+      if i == 'path':
+          if check_jail_Setting(i, jail[i]) == False:
+              sys.exit(2)
+      if i == 'zfs':
+          if check_jail_Setting(i, jail[i]) == False:
+              sys.exit(2)
+
+   print jail
+   print modjail
+   print new_jail
+
 
 def welcome():
    '''
