@@ -1310,7 +1310,7 @@ def check_jail_Setting(setting, val):
    if setting == 'install src':
        install_src = ['bsd', 'template', 'skel', 'src']
        if val not in install_src:
-          log(2, "enter only  %s!" % install_src)
+          log(2, "enter only  %s for install source!" % install_src)
           return False
        if val == 'template':
           if jails == False:
@@ -1961,7 +1961,7 @@ def jail_input_cli(cliargv):
            jail[i[0]] = i[1:]
 
    if 'name' not in jail.keys() or len(jail['name']) > 2:
-      log(2, "jail name/jid was not specified correctly!" % i)
+      log(2, "jail name/jid was not specified correctly!")
       sys.exit(2)
 
 # check if we have all needed arguments to create jail
@@ -1988,31 +1988,44 @@ def jail_input_cli(cliargv):
        modjail['install'] = ['', '']
        new_jail = modjail.copy()
 
-# check if we can see jail settings
+# check jail name
    for i in jail.keys():
       if i == 'name':
          if len(jail['name']) == 2 and '-c' not in cliargv:
             new_jail['name'] = jail['name'][1]
             if new_jail['name'] == modjail['name']:
                 continue
+         elif len(jail['name']) == 1:
+            if '-m' in cliargv:
+               new_jail['name'] = modjail['name']
+               continue
+            else:
+               new_jail['name'] = jail['name'][0]
          else:
-            new_jail['name'] = jail['name'][0]
+            log(2, "jail name/jid was not specified correctly!")
+            sys.exit(2)
 
          if check_jail_Setting(i, new_jail[i]) == False:
              sys.exit(2)
       else:
-         jail[i] = jail[i][0]
+         if i == 'install':
+             pass
+         else:
+             jail[i] = jail[i][0]
 
-
+# check jail id 'jid'
+   for i in jail.keys():
       if i == 'id':
-          if '-m' in cliargv:
-             if jail[i] == modjail['jid']:
-                continue
-          if check_jail_Setting(i, jail[i]) == False:
-              sys.exit(2)
-          else:
-              new_jail['jid'] = jail[i]
+         if '-m' in cliargv:
+            if jail['id'] == modjail['jid']:
+               continue
+         if check_jail_Setting(i, jail['id']) == False:
+            sys.exit(2)
+         else:
+            new_jail['jid'] = jail['id']
 
+# check if jail is vnet and gateway
+   for i in jail.keys():
       if i == 'vnet':
           if '-m' in cliargv:
              if jail[i] == modjail['$jgw']:
@@ -2028,12 +2041,12 @@ def jail_input_cli(cliargv):
              new_jail['gwnetmask']= find_gw[2]
              new_jail['vnet'] = 1
 
-
+# check jail ip address
+   for i in jail.keys():
       if i == 'ip':
           if '-m' in cliargv:
              if jail[i] == modjail['$jip']:
                 continue
-
           ip = check_jail_Setting(i, [jail['ip'], new_jail, modjail])
           if ip == False:
              sys.exit(2)
@@ -2043,6 +2056,8 @@ def jail_input_cli(cliargv):
              else:
                 new_jail['$jip'] = ip
 
+# check jail hostname
+   for i in jail.keys():
       if i == 'hostname':
           if '-m' in cliargv:
              if jail[i] == modjail['host.hostname']:
@@ -2052,30 +2067,43 @@ def jail_input_cli(cliargv):
           else:
               new_jail['host.hostname'] = jail[i]
 
+# check jail path
+   for i in jail.keys():
       if i == 'path':
-          jail[i] = "%s/%s" % (jail[i], jail['name'])
+          jpath = "%s/%s" % (jail[i], new_jail['name'])
           if '-m' in cliargv:
-             if jail[i] == modjail['path']:
+             if jpath == modjail['path']:
                 continue
-          if check_jail_Setting(i, jail[i]) == False:
+          if check_jail_Setting(i, jpath) == False:
               sys.exit(2)
           else:
-              new_jail['path'] = jail[i]
-
-      if i == 'zfs':
+              new_jail['path'] = jpath
+   '''
+   if 'zfs' in jail.keys():
           if '-m' in cliargv:
              if jail[i] == modjail['zfs']:
-                continue
+                pass
           if check_jail_Setting(i, jail[i]) == False:
               sys.exit(2)
+   '''
+# check install src
+   for i in jail.keys():
+      if i == 'install' and '-m' not in cliargv:
+         if jail[i][0] != 'template' and len(jail[i]) == 1:
+            if check_jail_Setting('install src', jail[i][0]) == False:
+               sys.exit(2)
+            else:
+               new_jail['install src'] = jail[i]
 
-      if i == 'install':
-         if len(jail['install']) == 2 and '-m' not in cliargv:
-            new_jail['install'] = jail['install'][1]
-            if new_jail['install'] == modjail['install']:
-                continue
+         elif jail[i][0] == 'template' and len(jail[i]) == 2:
+            template =  check_jail_Setting('template', jail[i][1])
+            if template == False:
+               sys.exit(2)
+            else:
+               new_jail['install src'] = jail[i]
          else:
-            new_jail['name'] = jail['name'][0]
+            log(2, "jail install source was not specified correctly!")
+            sys.exit(2)
 
    print jail
    print modjail
