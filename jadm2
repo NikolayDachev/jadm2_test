@@ -1994,11 +1994,11 @@ def jail_input_cli(cliargv):
          if len(jail['name']) == 2 and '-c' not in cliargv:
             new_jail['name'] = jail['name'][1]
             if new_jail['name'] == modjail['name']:
-                continue
+                break
          elif len(jail['name']) == 1:
             if '-m' in cliargv:
                new_jail['name'] = modjail['name']
-               continue
+               break
             else:
                new_jail['name'] = jail['name'][0]
          else:
@@ -2010,6 +2010,8 @@ def jail_input_cli(cliargv):
       else:
          if i == 'install':
              pass
+         elif i == 'zfs':
+             pass
          else:
              jail[i] = jail[i][0]
 
@@ -2018,7 +2020,7 @@ def jail_input_cli(cliargv):
       if i == 'id':
          if '-m' in cliargv:
             if jail['id'] == modjail['jid']:
-               continue
+               break
          if check_jail_Setting(i, jail['id']) == False:
             sys.exit(2)
          else:
@@ -2029,7 +2031,7 @@ def jail_input_cli(cliargv):
       if i == 'vnet':
           if '-m' in cliargv:
              if jail[i] == modjail['$jgw']:
-                continue
+                break
           gws = gateways()
           find_gw = check_jail_Setting(i, [jail[i], gws])
           if find_gw == False:
@@ -2046,7 +2048,7 @@ def jail_input_cli(cliargv):
       if i == 'ip':
           if '-m' in cliargv:
              if jail[i] == modjail['$jip']:
-                continue
+                break
           ip = check_jail_Setting(i, [jail['ip'], new_jail, modjail])
           if ip == False:
              sys.exit(2)
@@ -2061,7 +2063,7 @@ def jail_input_cli(cliargv):
       if i == 'hostname':
           if '-m' in cliargv:
              if jail[i] == modjail['host.hostname']:
-                continue
+                break
           if check_jail_Setting(i, jail[i]) == False:
               sys.exit(2)
           else:
@@ -2073,19 +2075,34 @@ def jail_input_cli(cliargv):
           jpath = "%s/%s" % (jail[i], new_jail['name'])
           if '-m' in cliargv:
              if jpath == modjail['path']:
-                continue
+                break
           if check_jail_Setting(i, jpath) == False:
               sys.exit(2)
           else:
               new_jail['path'] = jpath
-   '''
-   if 'zfs' in jail.keys():
+
+# check jail zfs
+   for i in jail.keys():
+      if i == 'zfs':
           if '-m' in cliargv:
+             if modjail['zfs'] == 0:
+                 break
              if jail[i] == modjail['zfs']:
-                pass
-          if check_jail_Setting(i, jail[i]) == False:
-              sys.exit(2)
-   '''
+                break
+
+          ezfs_check = check_jail_Setting('zfs', [jail[i][0], new_jail['name']])
+          if ezfs_check == False:
+             sys.exit(2)
+          else:
+             new_jail['zfs'][0] = '%s/%s' % (jail[i][0], new_jail['name'])
+# check zfs quota
+          if len(jail[i]) == 2:
+             if  check_jail_Setting('zquota', jail[i][1]) == False:
+                sys.exit(2)
+             else:
+                new_jail['zfs'][1] = jail[i][1]
+                break
+
 # check install src
    for i in jail.keys():
       if i == 'install' and '-m' not in cliargv:
