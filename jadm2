@@ -2089,6 +2089,12 @@ def jail_input_cli(cliargv):
                  break
              if jail[i] == modjail['zfs']:
                 break
+             if jail[i][0] == 'quota':
+                if  check_jail_Setting('zquota', jail[i][1]) == False:
+                   sys.exit(2)
+                else:
+                   new_jail['zfs'][-2] = jail[i][1]
+                   break
 
           ezfs_check = check_jail_Setting('zfs', [jail[i][0], new_jail['name']])
           if ezfs_check == False:
@@ -2110,14 +2116,14 @@ def jail_input_cli(cliargv):
             if check_jail_Setting('install src', jail[i][0]) == False:
                sys.exit(2)
             else:
-               new_jail['install src'] = jail[i]
+               new_jail['install'] = jail[i]
 
          elif jail[i][0] == 'template' and len(jail[i]) == 2:
             template =  check_jail_Setting('template', jail[i][1])
             if template == False:
                sys.exit(2)
             else:
-               new_jail['install src'] = jail[i]
+               new_jail['install'] = jail[i]
          else:
             log(2, "jail install source was not specified correctly!")
             sys.exit(2)
@@ -2125,7 +2131,21 @@ def jail_input_cli(cliargv):
    print jail
    print modjail
    print new_jail
+# check if we have changes:
+   if '-m' in cliargv:
+      modjail_diff = 0
+      for i in modjail.keys():
+         if new_jail[i] != modjail[i]:
+            modjail_diff = 1
+      if modjail_diff == 0:
+            log(0, "no changes in '%s' settings" % modjail['name'])
+            sys.exit(2)
+      new_jail['modify'] = modjail['name']
+      modify_jail(new_jail)
 
+# proceede new_jail
+   if '-c' in cliargv:
+      create_jail(new_jail)
 
 def welcome():
    '''
