@@ -2155,7 +2155,7 @@ List available commands with "help" or detailed help with "help cmd".
           jailNumbers = jailNumbers - 1
 # check actvie jails number
        if i['active'] == 1:
-        act.append(a)
+        act.append(i['name'])
    activeJails =  len(act)
 # check system uptime
    proc = subprocess.Popen('uptime', stdout=subprocess.PIPE)
