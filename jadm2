@@ -2044,6 +2044,20 @@ OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITU
 """) % (jadm_version)
    return about
 
+def sAction(s,  j = None):
+   """
+########################################################################################
+# r - stop jail
+# c - start jail
+# rc  - recreate
+   """
+   act_jail = {'c':'start', 'r':'stop', 'rc':'reboot'}
+   if verbose == 0:
+      subprocess.Popen("jail -%s %s" % (s, j), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).wait()
+   else:
+      subprocess.Popen("jail -v -%s %s" % (s, j), shell=True).wait()
+   log(0, "'%s' was '%s'!" % (j, act_jail[s]), 1)
+
 def startstop_jail(jnid = None, action = None):
    """
 ########################################################################################
@@ -2073,36 +2087,41 @@ def startstop_jail(jnid = None, action = None):
       jail = {}
       for x in jails:
          if x['name'] == i:
-             jail = x
+             jail = x.copy()
+             break
 
-      if jail['action'] == 'dying':
+      if jail['active'] == 'dying':
          log(1, "'%s' is dying and cannot be '%s'!" % (jail['name'], action))
          continue
       try:
 # start jail
+
          if action == 'start':
-            if jail['action'] == '1':
+            if jail['active'] == 1:
                log(1, "'%s' is already started!" % (jail['name']))
                continue
             else:
-               subprocess.call(['jail', '-c', jail['name']])
+               sAction('c',  jail['name'])
+
 # stop jail
          elif action == 'stop':
-            if jail['action'] == '0':
+            if jail['active'] == 0:
                log(1, "'%s' already stopped!" % (jail['name']))
                continue
             else:
-               subprocess.call(['jail', '-r', jail['name']])
+               sAction('r',  jail['name'])
+
 # reboot jail
          elif action == 'reboot':
-            subprocess.call(['jail', '-rc', jail['name']])
+            if jail['active'] == 1:
+               sAction('r',  jail['name'])
+            sAction('c',  jail['name'])
          else:
              return False
 
       except:
          log(2, "jadm cannot perform '%s' action for '%s'!" % (action, i))
 
-   log(2, "'%s' was '%s'!" % (i, action))
    return True
 
 ########################################################################################
