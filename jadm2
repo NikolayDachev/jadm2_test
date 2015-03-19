@@ -1269,7 +1269,10 @@ def check_jail_Setting(setting, val):
           return False
       if zfs(val[0])[2] != 1:
          log(2, "'%s' zfs root not exist!" % val[0])
-         zfs_y = raw_input('create it now (y)?> ')
+         if autoc != 'y':
+            zfs_y = raw_input('create it now (y)?> ')
+         else:
+             zfs_y = 'y'
          if 'y' in zfs_y:
             try:
                subprocess.check_call('zfs create %s' % val[0], shell=True)
@@ -1520,7 +1523,7 @@ def import_jail(jpath):
    update_jail_conf(['new_jail', [i_jail], 'create'])
    log(0, "jail '%s' was successful imported!" % i_jail['name'], 1)
 
-def jail_destroy(jailname, action = None, cli = None):
+def jail_destroy(jailname, action = None):
    """
 ########################################################################################
 #  Remove / Destroy existing jail
@@ -1533,11 +1536,14 @@ def jail_destroy(jailname, action = None, cli = None):
    if rmjail == False:
        return False
 
-   if cli == None:
-       yn = raw_input("will %s '%s' jail please confirm (y):> " % (action, rmjail['name']))
-       if 'y' not in yn:
-          log(0, 'user exit - !')
-          return False
+   if autoc != 'y':
+      yn = raw_input("will %s '%s' jail please confirm (y):> " % (action, rmjail['name']))
+   else:
+      yn = 'y'
+
+   if 'y' not in yn:
+      log(0, 'user exit - !')
+      return False
 
    if action == 'remove':
        update_jail_conf(['rm_jail', rmjail])
@@ -1698,243 +1704,28 @@ def BASE(src, path = None):
    log(0, "'BASE' jail was successful installed from '%s'!" % src)
    return True
 
-########################################################################################
-# MAIN MENU
-########################################################################################
-
-class lcmd(cmd.Cmd):
-   """
-########################################################################################
-#  interactive main menu with 'cmd' function
-#
-   """
-   jails_config = load_jail_config(jailconf)[0]
-   prompt = 'jadm:> '
-
-   jails = []
-   for i in jails_config:
-       jails.append(i['name'])
-
-   local_global = ['remove',  'add']
-   snap = ['list', 'create',  'remove',  'restore']
-   listcmd = ['list', 'hostname',  'ip',  'gw',
-              'active',  'inactive', 'dying',
-              'vnet', 'novnet', 'zfs', 'nozfs',
-              'skel', 'noskel', 'quota', 'used', 'empty']
-   mserver = ['server',  'client']
-
-   def do_list(self, arg):
-      """ List of jails in table format
-      - FLAGS
-      S - skeleton model jail
-      V - vnet jail
-      Z - zfs jail
-      _DYING - dying jail
-
-      - usage: list
-
-      (search options)
-      - only actvie jails (usage: list active)
-      - only inactive jails (usage: list inactive)
-      - only dying jails (usage: list dying)
-      - no fully configured jails (usage: list empty)
-      - by name (usage: list 'name/jid' )
-      - by hostname (usage: list hostname 'jail hostname' )
-      - by path (usage: lisy path '/jail/home/path' )
-      - by ipaddress (usage: list ip 'ipaddress' )
-      - by gateway (usage: list gw 'gateway ip' )
-      - only vnet jails (usage: list vnet )
-      - only none vnet jails (usage: list novnet )
-      - only skel jails (usage: list skel )
-      - only none skel jails (usage: list noskel )
-      - only none zfs jails (usage list nozfs)
-      --- apply only on zfs jails ---
-      - only zfs jails (usage: list zfs)
-      - by zfs quota (usage: list quota 'xxx('K', 'M', 'G', 'T', 'P', 'E')')
-      show jails with quota = or > form x number
-      - by zfs used space (usage: list used xxx('K', 'M', 'G', 'T', 'P', 'E')')
-      show jails with used space = or > form x number
-      """
-      arg = str(arg).split(' ')
-
-      if arg[0] != '':
-         arg.insert(0,'list')
-         arg = [i for i in arg if i != '']
-
-      jail_table(arg)
-
-   def complete_list(self, text, line, begidx, endidx):
-      if not text:
-         completions = self.listcmd[:]
-      else:
-         completions = [ f for f in self.listcmd if f.startswith(text)]
-         return completions
-
-   def do_jls(self,  arg):
-      """ Short list of jails in table format
-      - FLAGS
-      S - skeleton model jail
-      V - vnet jail
-      Z - zfs jail
-      _DYING - jails is dying
-
-      - usage: jls
-
-        same as list (show jails table in short format)
-      """
-      arg = str(arg).split(' ')
-      arg.insert(0,'jls')
-      arg = [i for i in arg if i != '']
-
-      jail_table(arg)
-
-   def complete_jls(self, text, line, begidx, endidx):
-      if not text:
-         completions = self.listcmd[:]
-      else:
-         completions = [ f for f in self.listcmd if f.startswith(text)]
-         return completions
-
-   def do_gateways(self,  arg):
-      """ Show system 'bridgeX' interfaces 
-          used for jail gateways and OS (system) default gateway 
-      """
-
-      gateways(gwtable = 1)
-      
-   def do_globals(self,  arg):
-      """Globals settings
-        - list of globals settings (usage: globals)
-        - remove global setting (usage: globals remove 'setting number' )
-        - add global setting (usage: globals add 'setting=val')
-      """
-
-      arg = str(arg).split(' ')
-      arg = [i for i in arg if i != '']
- 
-      if len(arg) > 1:     
-         globals(arg[0], arg[1])
-      else:
-         globals()
-
-   def complete_globals(self, text, line, begidx, endidx):
-      if not text:
-         completions = self.local_global[:]
-      else:
-         completions = [ f for f in self.local_global if f.startswith(text)]
-         return completions
-
-   def do_locals(self,  arg):
-      """Jails Locals settings
-        - list of jail locals settings (usage: locals 'name/jid')
-        - remove jail local setting (usage: locals 'name/jid' remove 'setting number' )
-        - add jail local setting (usage: locals 'name/jid' add 'setting=val')
-      """
-
-      arg = str(arg).split(' ')
-      arg = [i for i in arg if i != '']
-
-      if len(arg) == 3:
-         locals(arg[0], arg[1], arg[2])
-      elif len(arg) == 1:
-         locals(arg[0])
-      else:
-         log(2, "Please enter 'help locals' for valid commands!")
-
-   def complete_locals(self, text, line, begidx, endidx):
-      if not text:
-         completions = self.local_global[:]
-      else:
-         completions = [ f for f in self.local_global if f.startswith(text)]
-         return completions
-
-   def do_create(self, arg):
-      """ Create new jail
-       * BASE jail
-       - create new BASE jail    (usage: create BASE 'bsd/src' '/top/BASE/folder')
-       - install BASE ports tree (usage: create BASE ports install)
-       - update BASE  ports tree (usage: create BASE ports update)
-
-       * Import existing 'jadm' jail
-       - usage: create /exsiting/jail/rootpath
-
-       * to create new jail (usage: create) without arguments
-      """
-
-      arg = str(arg).split(' ')
-      arg = [i for i in arg if i != '']
-
-      if len(arg) >= 1:
-         if arg[0] == 'BASE':
-            BASE(arg[1], arg[2])
-         elif arg[0] == 'srcbuild':
-            srcbuild()
-         elif arg[0][0] == '/':
-            import_jail(arg[0])
-         else:
-            pass
-      else:
-         jail_input()
-
-   def do_modify(self, arg):
-       """ Modify jail
-        - usage: modify 'name/jid'
-       """
-       jail_input(arg)
-
-   def complete_modify(self, text, line, begidx, endidx):
-      if not text:
-         completions = self.jails[:]
-      else:
-         completions = [ f for f in self.jails if f.startswith(text)]
-         return completions
-
-   def do_destroy(self, arg):
-        """ Destroy jail and delete jail data/zfs
-        - usage: destroy 'name/jid'
-        """
-        jail_destroy(arg, 'destroy')
-
-   def do_remove(self, arg):
-        """ Remove jail but keep jail data/zfs
-        - usage: remove 'name/jid'
-        """
-        jail_destroy(arg, 'remove')
-
-   def do_about(self, arg):
-       """ About JADM and license info
-       """
-       print about()
-
-   def do_exit(self, arg):
-        """ Exit from JADM
-        """
-        print "Good bye!"
-        sys.exit(0)
-
-   def do_quit(self, arg):
-        """ Exit from JADM
-        """
-        print "Good bye!"
-        sys.exit(0)
-
 def cli():
    """
 ########################################################################################
 #  jadm command line interface
 #
    """
-   if sys.argv[1] in ['-y', '-v', '-c', '-m', '-i']:
 # cli verbose mode for start/stop jail
-      if '-v' in sys.argv:
-         verbose = 1
-         log(0, "run/stop jail verbose mode enable!")
+   if '-v' in sys.argv:
+      global verbose
+      verbose = 1
+      log(0, "run/stop jail verbose mode enable!")
 
 # cli auto confirm
-      if '-y' in sys.argv:
-         autoc = 'y'
-         log(1, "auto confirm mode enable!")
+   if '-y' in sys.argv:
+      global autoc
+      autoc = 'y'
+      log(1, "auto confirm mode enable!")
 
+# remove ['-v', '-y'] from cmd list
+   sys.argv = [x for x in sys.argv if x not in ['-v', '-y']]
+
+   if sys.argv[1] in ['-c', '-m', '-i']:
 # cli create or modify jail
       if '-c' in sys.argv or '-m' in sys.argv:
             if '-c' in sys.argv and '-m' in sys.argv:
@@ -2253,6 +2044,225 @@ OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITU
 """) % (jadm_version)
    return about
 
+########################################################################################
+# MAIN MENU
+########################################################################################
+
+class lcmd(cmd.Cmd):
+   """
+########################################################################################
+#  interactive main menu with 'cmd' function
+#
+   """
+   jails_config = load_jail_config(jailconf)[0]
+   prompt = 'jadm:> '
+
+   jails = []
+   for i in jails_config:
+       jails.append(i['name'])
+
+   local_global = ['remove',  'add']
+   snap = ['list', 'create',  'remove',  'restore']
+   listcmd = ['list', 'hostname',  'ip',  'gw',
+              'active',  'inactive', 'dying',
+              'vnet', 'novnet', 'zfs', 'nozfs',
+              'skel', 'noskel', 'quota', 'used', 'empty']
+   mserver = ['server',  'client']
+
+   def do_list(self, arg):
+      """ List of jails in table format
+      - FLAGS
+      S - skeleton model jail
+      V - vnet jail
+      Z - zfs jail
+      _DYING - dying jail
+
+      - usage: list
+
+      (search options)
+      - only actvie jails (usage: list active)
+      - only inactive jails (usage: list inactive)
+      - only dying jails (usage: list dying)
+      - no fully configured jails (usage: list empty)
+      - by name (usage: list 'name/jid' )
+      - by hostname (usage: list hostname 'jail hostname' )
+      - by path (usage: lisy path '/jail/home/path' )
+      - by ipaddress (usage: list ip 'ipaddress' )
+      - by gateway (usage: list gw 'gateway ip' )
+      - only vnet jails (usage: list vnet )
+      - only none vnet jails (usage: list novnet )
+      - only skel jails (usage: list skel )
+      - only none skel jails (usage: list noskel )
+      - only none zfs jails (usage list nozfs)
+      --- apply only on zfs jails ---
+      - only zfs jails (usage: list zfs)
+      - by zfs quota (usage: list quota 'xxx('K', 'M', 'G', 'T', 'P', 'E')')
+      show jails with quota = or > form x number
+      - by zfs used space (usage: list used xxx('K', 'M', 'G', 'T', 'P', 'E')')
+      show jails with used space = or > form x number
+      """
+      arg = str(arg).split(' ')
+
+      if arg[0] != '':
+         arg.insert(0,'list')
+         arg = [i for i in arg if i != '']
+
+      jail_table(arg)
+
+   def complete_list(self, text, line, begidx, endidx):
+      if not text:
+         completions = self.listcmd[:]
+      else:
+         completions = [ f for f in self.listcmd if f.startswith(text)]
+         return completions
+
+   def do_jls(self,  arg):
+      """ Short list of jails in table format
+      - FLAGS
+      S - skeleton model jail
+      V - vnet jail
+      Z - zfs jail
+      _DYING - jails is dying
+
+      - usage: jls
+
+        same as list (show jails table in short format)
+      """
+      arg = str(arg).split(' ')
+      arg.insert(0,'jls')
+      arg = [i for i in arg if i != '']
+
+      jail_table(arg)
+
+   def complete_jls(self, text, line, begidx, endidx):
+      if not text:
+         completions = self.listcmd[:]
+      else:
+         completions = [ f for f in self.listcmd if f.startswith(text)]
+         return completions
+
+   def do_gateways(self,  arg):
+      """ Show system 'bridgeX' interfaces
+          used for jail gateways and OS (system) default gateway
+      """
+
+      gateways(gwtable = 1)
+
+   def do_globals(self,  arg):
+      """Globals settings
+        - list of globals settings (usage: globals)
+        - remove global setting (usage: globals remove 'setting number' )
+        - add global setting (usage: globals add 'setting=val')
+      """
+
+      arg = str(arg).split(' ')
+      arg = [i for i in arg if i != '']
+
+      if len(arg) > 1:
+         globals(arg[0], arg[1])
+      else:
+         globals()
+
+   def complete_globals(self, text, line, begidx, endidx):
+      if not text:
+         completions = self.local_global[:]
+      else:
+         completions = [ f for f in self.local_global if f.startswith(text)]
+         return completions
+
+   def do_locals(self,  arg):
+      """Jails Locals settings
+        - list of jail locals settings (usage: locals 'name/jid')
+        - remove jail local setting (usage: locals 'name/jid' remove 'setting number' )
+        - add jail local setting (usage: locals 'name/jid' add 'setting=val')
+      """
+
+      arg = str(arg).split(' ')
+      arg = [i for i in arg if i != '']
+
+      if len(arg) == 3:
+         locals(arg[0], arg[1], arg[2])
+      elif len(arg) == 1:
+         locals(arg[0])
+      else:
+         log(2, "Please enter 'help locals' for valid commands!")
+
+   def complete_locals(self, text, line, begidx, endidx):
+      if not text:
+         completions = self.local_global[:]
+      else:
+         completions = [ f for f in self.local_global if f.startswith(text)]
+         return completions
+
+   def do_create(self, arg):
+      """ Create new jail
+       * BASE jail
+       - create new BASE jail    (usage: create BASE 'bsd/src' '/top/BASE/folder')
+       - install BASE ports tree (usage: create BASE ports install)
+       - update BASE  ports tree (usage: create BASE ports update)
+
+       * Import existing 'jadm' jail
+       - usage: create /exsiting/jail/rootpath
+
+       * to create new jail (usage: create) without arguments
+      """
+
+      arg = str(arg).split(' ')
+      arg = [i for i in arg if i != '']
+
+      if len(arg) >= 1:
+         if arg[0] == 'BASE':
+            BASE(arg[1], arg[2])
+         elif arg[0] == 'srcbuild':
+            srcbuild()
+         elif arg[0][0] == '/':
+            import_jail(arg[0])
+         else:
+            pass
+      else:
+         jail_input()
+
+   def do_modify(self, arg):
+       """ Modify jail
+        - usage: modify 'name/jid'
+       """
+       jail_input(arg)
+
+   def complete_modify(self, text, line, begidx, endidx):
+      if not text:
+         completions = self.jails[:]
+      else:
+         completions = [ f for f in self.jails if f.startswith(text)]
+         return completions
+
+   def do_destroy(self, arg):
+        """ Destroy jail and delete jail data/zfs
+        - usage: destroy 'name/jid'
+        """
+        jail_destroy(arg, 'destroy')
+
+   def do_remove(self, arg):
+        """ Remove jail but keep jail data/zfs
+        - usage: remove 'name/jid'
+        """
+        jail_destroy(arg, 'remove')
+
+   def do_about(self, arg):
+       """ About JADM and license info
+       """
+       print about()
+
+   def do_exit(self, arg):
+        """ Exit from JADM
+        """
+        print "Good bye!"
+        sys.exit(0)
+
+   def do_quit(self, arg):
+        """ Exit from JADM
+        """
+        print "Good bye!"
+        sys.exit(0)
 
 ########################################################################################
 # Start Jadm script
