@@ -1369,8 +1369,9 @@ def create_jail(newjail):
       subprocess.call(['bsdinstall', 'jail', '%s' % newjail['path']])
 
    if newjail['install'][0] == 'src':
-      subprocess.call(['cd', '/usr/src', '&&', 'make', 'installworld', 'DESTDIR=%s' % newjail['path']])
-      subprocess.call(['cd', '/usr/src', '&&', 'make', 'distribution', 'DESTDIR=%s' % newjail['path']])
+      os.chdir("/usr/src/")
+      subprocess.call(['make', 'installworld', 'DESTDIR=%s' % newjail['path']])
+      subprocess.call(['make', 'distribution', 'DESTDIR=%s' % newjail['path']])
 
    if newjail['install'][0] == 'skel':
 # find BASE jail
@@ -1658,7 +1659,7 @@ def BASE(src, path = None):
 
    if src == 'src':
       try:
-         subprocess.call(['cd', '/usr/src'])
+         os.chdir("/usr/src/")
          subprocess.call(['make', 'installworld', 'DESTDIR=%s' % path])
          subprocess.call(['make', 'distribution', 'DESTDIR=%s' % path])
       except:
