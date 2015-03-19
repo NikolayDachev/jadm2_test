@@ -1326,7 +1326,7 @@ def check_jail_Setting(setting, val):
           return False
        if val == 'src':
           log(1, "'src' will use pre build freebsd sources from /usr/src")
-          print "   please use 'create buildsrc' before continue if 'make buildworld'"
+          print "   please use 'create srcbuild' before continue if 'make buildworld'"
           print "   is not done on this system or do this manually"
           print ""
 
@@ -1555,6 +1555,21 @@ def jail_destroy(jailname, action = None, cli = None):
 
    log(1, "jadm %s '%s' jail successful!" % (action, rmjail['name']), 1)
    return True
+
+def srcbuild():
+   """
+########################################################################################
+# build OS sources
+#
+   """
+   try:
+      os.chdir("/usr/src/")
+      subprocess.call(['make', 'buildworld'])
+      log(0, "OS sources are build successful!", 1)
+      return True
+   except:
+      log(2, "jadm was not able to build OS sources successful!", 1)
+      return False
 
 def BASE(src, path = None):
    """
@@ -1851,6 +1866,8 @@ class lcmd(cmd.Cmd):
       if len(arg) >= 1:
          if arg[0] == 'BASE':
             BASE(arg[1], arg[2])
+         elif arg[0] == 'srcbuild':
+            srcbuild()
          elif arg[0][0] == '/':
             import_jail(arg[0])
          else:
