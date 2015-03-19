@@ -2044,6 +2044,67 @@ OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITU
 """) % (jadm_version)
    return about
 
+def startstop_jail(jnid = None, action = None):
+   """
+########################################################################################
+#  start/stop single or all jails
+#
+   """
+   jails = load_jail_config(jailconf)[0]
+
+   ssjail = []
+# add all jails
+   if jnid == 'all':
+      for i in jails:
+         if i['name'] != 'BASE':
+            ssjail.append(i['name'])
+   else:
+# check if jail exist
+      isjail = check_jail_Setting('modify', jnid)
+      if isjail == False:
+         return False
+      else:
+          if isjail['name'] == 'BASE':
+              return False
+          ssjail = [isjail['name']]
+
+# do action
+   for i in ssjail:
+      jail = {}
+      for x in jails:
+         if x['name'] == i:
+             jail = x
+
+      if jail['action'] == 'dying':
+         log(1, "'%s' is dying and cannot be '%s'!" % (jail['name'], action))
+         continue
+      try:
+# start jail
+         if action == 'start':
+            if jail['action'] == '1':
+               log(1, "'%s' is already started!" % (jail['name']))
+               continue
+            else:
+               subprocess.call(['jail', '-c', jail['name']])
+# stop jail
+         elif action == 'stop':
+            if jail['action'] == '0':
+               log(1, "'%s' already stopped!" % (jail['name']))
+               continue
+            else:
+               subprocess.call(['jail', '-r', jail['name']])
+# reboot jail
+         elif action == 'reboot':
+            subprocess.call(['jail', '-rc', jail['name']])
+         else:
+             return False
+
+      except:
+         log(2, "jadm cannot perform '%s' action for '%s'!" % (action, i))
+
+   log(2, "'%s' was '%s'!" % (i, action))
+   return True
+
 ########################################################################################
 # MAIN MENU
 ########################################################################################
@@ -2263,6 +2324,28 @@ class lcmd(cmd.Cmd):
         """
         print "Good bye!"
         sys.exit(0)
+
+   def do_start(self, arg):
+        """ Start jail
+        - start jail: start 'name/jid'
+        - start all jails: start all
+        """
+        startstop_jail(arg, 'start')
+
+   def do_stop(self, arg):
+        """ Stop jail
+        - stop jail: stop 'name/jid'
+        - stop all jails: stop all
+        """
+        startstop_jail(arg, 'stop')
+
+   def do_reboot(self, arg):
+        """ Reboot jail
+        - reboot jail: reboot 'name/jid'
+        - reboot all jails: reboot all
+        """
+        startstop_jail(arg, 'reboot')
+
 
 ########################################################################################
 # Start Jadm script
