@@ -2164,20 +2164,21 @@ class jail_zfs_snap():
 
    def find_jail(self, jnid):
 # check if jail exist
-      jail = check_jail_Setting('modify', jnid)
-      if jail == False:
+      self.jail = check_jail_Setting('modify', jnid)
+      if self.jail == False:
          return False
 # check if this is zfs jail
-      if jail['zfs'] == 0:
-         log(2, "'%s' is not a zfs jail!" % jail['name'])
+      if self.jail['zfs'] == 0:
+         log(2, "'%s' is not a zfs jail!" % self.jail['name'])
          return False
-      return jail
 
    def list(self, jail, tab = 1):
 # get zfs snapshots
+      if self.find_jail(jail) == False:
+          return False
       jzfs = []
       jzfsnum = 0
-      zfs_snap_search = jail['zfs'][0]+'@'
+      zfs_snap_search = self.jail['zfs'][0]+'@'
       cmd = "zfs list -t snapshot |grep %s" %  (zfs_snap_search)
       try:
          for x in subprocess.check_output(cmd, shell=True).split('\n'):
@@ -2187,29 +2188,85 @@ class jail_zfs_snap():
       except:
          pass
       if jzfs == []:
-         log(0, "'%s' jail - '%s' doesnt have zfs snapshots!" % (jail['name'], jail['zfs'][0]))
+         log(0, "'%s' jail - '%s' doesnt have zfs snapshots!" % (self.jail['name'], self.jail['zfs'][0]))
          return False
-      lmen = ["'%s'" % jail['name'],  " ZFS SNAPSHOTS", "SIZE"]
+      lmen = ["'%s'" % self.jail['name'],  " ZFS SNAPSHOTS", "SIZE"]
       if tab == 1:
          print tabulate(jzfs, lmen)
       return jzfs
 
    def create(self, jail):
 # create jail zfs snapshot
+      if self.find_jail(jail) == False:
+          return False
       dt = str(datetime.utcnow().isoformat())
-      jzsnap = "%s@%s" % (jail['zfs'][0], dt)
+      jzsnap = "%s@%s" % (self.jail['zfs'][0], dt)
       try:
           os.system("zfs snapshot "+jzsnap)
-          log(0, "zfs snap '%s' was created for '%s'!" % (jzsnap, jail['name']), 1)
+          log(0, "zfs snap '%s' was created for '%s'!" % (jzsnap, self.jail['name']), 1)
           return True
       except:
-          log(2, "jadm was not able to create '%s' zfs snap for '%s'!" % (jzsnap, jail['name']), 1)
+          log(2, "jadm was not able to create '%s' zfs snap for '%s'!" % (jzsnap, self.jail['name']), 1)
           return False
 
-   def remove(self, jail):
+   def remove(self, jail, num):
 # remove jail zfs snapshot
-      js = list(jail)
-      print js
+      if self.find_jail(jail) == False or self.list(jail, 0) == False:
+          return False
+      check = []
+      for i in self.list(jail, 0):
+          check.append(str(i[0]))
+
+      if num not in check:
+          self.list(jail)
+          log(2, "'%s' is not a '%s' jail snapshot number!" % (num, self.jail['name']))
+          return False
+      rmsnap = self.list(jail, 0)[int(num)][1]
+      try:
+          os.system(" zfs destroy -rf "+ rmsnap)
+          log(1, "'%s' zfs snap '%s' was removed!" % (self.jail['name'], rmsnap), 1)
+          return True
+      except:
+          log(2, "jadm was not able to remove '%s' zfs snap for '%s'!" % (rmsnap, self.jail['name']), 1)
+          return False
+
+   def restore(self, jail, num):
+# restore jail snapshot
+      if self.find_jail(jail) == False or self.list(jail, 0) == False:
+          return False
+
+      if self.jail['active'] != 0:
+          log(2, "zfs snapshot cannot be restored when '%s' is running or dying!" % (self.jail['name']))
+          return False
+
+      check = []
+      for i in self.list(jail, 0):
+          check.append(str(i[0]))
+
+      if num not in check:
+          self.list(jail)
+          log(2, "'%s' is not a '%s' jail snapshot number!" % (num, self.jail['name']))
+          return False
+      resnap = self.list(jail, 0)[int(num)][1]
+
+      log(1, "'%s' will be restored from '%s' zfs snapshot!" % (self.jail['name'], resnap))
+      log(1, "all zfs snapshots newer than '%s' will be removed!" % resnap)
+
+      if autoc != 'y':
+          yn = raw_input('confirm (y):> ')
+      else:
+          yn = 'y'
+
+      if 'y' not in yn:
+          return False
+
+      try:
+         os.system("zfs rollback -r %s" % resnap)
+         log(0, "'%s' was restored from '%s' zfs snapshot!" % (self.jail['name'], resnap), 1)
+         return True
+      except:
+          log(2, "jadm was not able to restore '%s' zfs snap for '%s'!" % (resnap, self.jail['name']), 1)
+          return False
 
 ########################################################################################
 # MAIN MENU
@@ -2467,19 +2524,16 @@ class lcmd(cmd.Cmd):
         jlist = jail_zfs_snap()
 
         if len(arg) == 1:
-           jail = jlist.find_jail(arg[0])
-           if jail != False:
-              jlist.list(jail)
+           jlist.list(arg[0])
 
-        if arg[0] == 'create':
-           jail = jlist.find_jail(arg[1])
-           if jail != False:
-              jlist.create(jail)
+        if len(arg) == 2 and arg[1] == 'create':
+           jlist.create(arg[0])
 
-        if arg[0] == 'remove':
-           jail = jlist.find_jail(arg[1])
-           if jail != False:
-              jlist.remove(jail)
+        if len(arg) == 3 and  arg[1] == 'remove':
+           jlist.remove(arg[0], arg[2])
+
+        if len(arg) == 3 and  arg[1] == 'restore':
+           jlist.restore(arg[0], arg[2])
 
 ########################################################################################
 # Start Jadm script
