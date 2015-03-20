@@ -2286,7 +2286,7 @@ class lcmd(cmd.Cmd):
        jails.append(i['name'])
 
    local_global = ['remove',  'add']
-   snap = ['list', 'create',  'remove',  'restore']
+   snap = ['create',  'remove',  'restore']
    listcmd = ['list', 'hostname',  'ip',  'gw',
               'active',  'inactive', 'dying',
               'vnet', 'novnet', 'zfs', 'nozfs',
@@ -2534,6 +2534,16 @@ class lcmd(cmd.Cmd):
 
         if len(arg) == 3 and  arg[1] == 'restore':
            jlist.restore(arg[0], arg[2])
+
+   def complete_snap(self, text, line, begidx, endidx):
+        if not text:
+            completions = self.snap[:]
+        else:
+            completions = [ f
+                            for f in self.snap
+                            if f.startswith(text)
+                            ]
+        return completions
 
 ########################################################################################
 # Start Jadm script
