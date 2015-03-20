@@ -639,7 +639,7 @@ def locals(j = None, action = None, setting = None):
       ls.append([num, i[1]])
       num += 1
 
-   lmen = ["'%s' LOCALS SETTINGS" % jail['name']]
+   lmen = ["'%s'" % jail['name'], "LOCALS SETTINGS"]
 
 # list jail local settings
    if action == None:
@@ -2124,6 +2124,93 @@ def startstop_jail(jnid = None, action = None):
 
    return True
 
+def jail_shell(jnid = None):
+   """
+########################################################################################
+# enter in jail shell (jexec) using root shell from jail /etc/passwd
+#
+   """
+   jails = load_jail_config(jailconf)[0]
+
+# check if jail exist
+   j = check_jail_Setting('modify', jnid)
+   if j == False:
+      return False
+
+   if j['active'] !=  1:
+       log(2, "'%s' is not running!" % j['name'])
+       return False
+
+# find jail root shell!
+   root_sheel = subprocess.check_output("head -n3 %s/etc/passwd" % j['path'], shell=True).strip('jid')
+   root_sheel = root_sheel.split(':')
+
+   log(0, "Enter in '%s' jail!" % j['name'])
+   try:
+       os.system ("jexec %s %s" % (j['name'], root_sheel[-1]))
+   except:
+       log(0, "can't login in '%s'!" % j['name'])
+       return False
+
+   log(0, "Exit from '%s' jail!" % j['name'])
+
+class jail_zfs_snap():
+   """
+########################################################################################
+#  list, create or remove zfs jail snapshots
+#
+   """
+   jails = load_jail_config(jailconf)[0]
+
+   def find_jail(self, jnid):
+# check if jail exist
+      jail = check_jail_Setting('modify', jnid)
+      if jail == False:
+         return False
+# check if this is zfs jail
+      if jail['zfs'] == 0:
+         log(2, "'%s' is not a zfs jail!" % jail['name'])
+         return False
+      return jail
+
+   def list(self, jail, tab = 1):
+# get zfs snapshots
+      jzfs = []
+      jzfsnum = 0
+      zfs_snap_search = jail['zfs'][0]+'@'
+      cmd = "zfs list -t snapshot |grep %s" %  (zfs_snap_search)
+      try:
+         for x in subprocess.check_output(cmd, shell=True).split('\n'):
+            x = cleanlist(x.split(' '))
+            jzfs.append([jzfsnum, x[0], x[3]])
+            jzfsnum += 1
+      except:
+         pass
+      if jzfs == []:
+         log(0, "'%s' jail - '%s' doesnt have zfs snapshots!" % (jail['name'], jail['zfs'][0]))
+         return False
+      lmen = ["'%s'" % jail['name'],  " ZFS SNAPSHOTS", "SIZE"]
+      if tab == 1:
+         print tabulate(jzfs, lmen)
+      return jzfs
+
+   def create(self, jail):
+# create jail zfs snapshot
+      dt = str(datetime.utcnow().isoformat())
+      jzsnap = "%s@%s" % (jail['zfs'][0], dt)
+      try:
+          os.system("zfs snapshot "+jzsnap)
+          log(0, "zfs snap '%s' was created for '%s'!" % (jzsnap, jail['name']), 1)
+          return True
+      except:
+          log(2, "jadm was not able to create '%s' zfs snap for '%s'!" % (jzsnap, jail['name']), 1)
+          return False
+
+   def remove(self, jail):
+# remove jail zfs snapshot
+      js = list(jail)
+      print js
+
 ########################################################################################
 # MAIN MENU
 ########################################################################################
@@ -2365,6 +2452,34 @@ class lcmd(cmd.Cmd):
         """
         startstop_jail(arg, 'reboot')
 
+   def do_shell(self, arg):
+        """  Enter in Jail
+        - usage: shell 'name/jid'
+        """
+        jail_shell(arg)
+
+   def do_snap(self, arg):
+        """  Enter in Jail
+        - usage: shell 'name/jid'
+        """
+        arg = str(arg).split(' ')
+        arg = [i for i in arg if i != '']
+        jlist = jail_zfs_snap()
+
+        if len(arg) == 1:
+           jail = jlist.find_jail(arg[0])
+           if jail != False:
+              jlist.list(jail)
+
+        if arg[0] == 'create':
+           jail = jlist.find_jail(arg[1])
+           if jail != False:
+              jlist.create(jail)
+
+        if arg[0] == 'remove':
+           jail = jlist.find_jail(arg[1])
+           if jail != False:
+              jlist.remove(jail)
 
 ########################################################################################
 # Start Jadm script
