@@ -46,6 +46,7 @@ import netifaces
 import cmd
 # network server
 from Crypto.Cipher import AES
+import SocketServer
 import base64
 import threading
 import paramiko
@@ -2274,6 +2275,15 @@ class jail_zfs_snap:
 # MIGRATION BETWEEN HOSTS
 ########################################################################################
 
+class tcp_server(SocketServer.BaseRequestHandler):
+
+   def handle(self):
+      redata = self.request.recv(1024)
+      self.request.sendall(redata)
+
+class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
+   pass
+
 class net:
 
    def __init__(self, host = None, port = None, secret = None, data = None):
@@ -2326,15 +2336,7 @@ class net:
 #       recv aes encypted data
 #
       '''
-      try:
-         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-         s.bind((self.host, self.port))
-         s.listen(1)
-         log(0, "jadm server was bind to '%s:%s' address" % (self.host, self.port), 1)
-      except:
-         log(2, "jadm cant bind '%s:%s' address" % (self.host, self.port), 1)
-         return False
+
 
 # start recv. data
       conn, addr = s.accept()
@@ -2346,8 +2348,7 @@ class net:
 # DEC
       decData = self.aes(data, self.secret, 'dec')
       if 'closeconn' in decData:
-         s.shutdown(socket.SHUT_RDWR)
-         s.close()
+          server.shutdown()
       return decData
 
    def client(self):
@@ -2662,11 +2663,19 @@ class lcmd(cmd.Cmd):
         arg = str(arg).split(' ')
         arg = [i for i in arg if i != '']
 
-        server = net(arg[0], arg[1], arg[2])
-# Create new server threads
-        thServer = threading.Thread(target=server.server())
-        thServer.daemon = True
-        thServer.start()
+        try:
+           server = ThreadedTCPServer((arg[0], arg[1]),tcp_server)
+           ip, port = server.server_address
+# Start a thread with the server -- that thread will then start one
+# more thread for each request
+           server_thread = threading.Thread(target=server.serve_forever)
+# Exit the server thread when the main thread terminates
+           server_thread.daemon = True
+           server_thread.start()
+           log(0, "jadm server was bind to '%s:%s' address" % (ip, port), 1)
+        except:
+           log(2, "jadm cant bind '%s:%s' address" % (ip, port), 1)
+           return False
 
 
 ########################################################################################
