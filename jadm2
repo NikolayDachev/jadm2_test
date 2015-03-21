@@ -48,7 +48,6 @@ import cmd
 from Crypto.Cipher import AES
 import base64
 import threading
-import ftplib
 import paramiko
 import socket
 
@@ -142,6 +141,7 @@ def load_jail_config(conf_f):
 #  '$jgw':'jail gateway','path':'jail home dir', 'vnet':'is this vnet jail', 'zfs':'is thi zfs jail', ... }
 #
    """
+
 # check if jail.conf exist
    if os.path.isfile(conf_f) != True:
       log(2, "'%s' not exist!" % conf_f)
@@ -2273,6 +2273,7 @@ class jail_zfs_snap:
 ########################################################################################
 # MIGRATION BETWEEN HOSTS
 ########################################################################################
+
 class net:
 
    def __init__(self, host = None, port = None, secret = None, data = None):
@@ -2325,7 +2326,6 @@ class net:
 #       recv aes encypted data
 #
       '''
-      recvlist = []
       try:
          s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
          s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -2340,20 +2340,15 @@ class net:
       conn, addr = s.accept()
       log(0, "jadm server is connected by: '%s'" % addr, 1)
 
-# REC text list (jail config)
-      mig_data= []
-      while True:
 # REC
-         data = conn.recv(1024)
+      data = conn.recv(1024)
+      conn.send(data)
 # DEC
-         decData = self.aes(data, self.secret, 'dec')
-         mig_data.append(decData)
-         if 'closeconn' in decData:
-            s.shutdown(socket.SHUT_RDWR)
-            s.close()
-            mig_data[-1] = addr[0]
-            return mig_data
-         conn.send(data)
+      decData = self.aes(data, self.secret, 'dec')
+      if 'closeconn' in decData:
+         s.shutdown(socket.SHUT_RDWR)
+         s.close()
+      return decData
 
    def client(self):
       '''
@@ -2670,7 +2665,7 @@ class lcmd(cmd.Cmd):
         server = net(arg[0], arg[1], arg[2])
 # Create new server threads
         thServer = threading.Thread(target=server.server())
-   #     thServer.daemon = True
+        thServer.daemon = True
         thServer.start()
 
 
