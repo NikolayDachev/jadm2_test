@@ -38,17 +38,19 @@ OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITU
 from datetime import datetime
 from tabulate import tabulate
 from ipaddress import *
-from Crypto.Cipher import AES
 import sys
 import os
 import logging
 import subprocess
 import netifaces
 import cmd
+# network server
+from Crypto.Cipher import AES
+import base64
+import threading
 import ftplib
 import paramiko
 import socket
-import base64
 
 ########################################################################################
 # Main config vars:
@@ -2271,41 +2273,115 @@ class jail_zfs_snap:
 ########################################################################################
 # MIGRATION BETWEEN HOSTS
 ########################################################################################
+class net:
 
-def aes(data, secret ,encdec):
-   '''
+   def __init__(self, host = None, port = None, secret = None, data = None):
+       self.host = host
+       try:
+          self.port = int(port)
+       except:
+          return False
+       self.secret = secret
+       self.data = data
+
+   def aes(self, encdec):
+      '''
 ########################################################################################
 #   Original src: http://www.codekoala.com/posts/aes-encryption-python-using-pycrypto/
 #
-   '''
-   # the block size for the cipher object; must be 16, 24, or 32 for AES
-   BLOCK_SIZE = 32
+      '''
+# the block size for the cipher object; must be 16, 24, or 32 for AES
+      BLOCK_SIZE = 32
 
-   # the character used for padding--with a block cipher such as AES, the value
-   # you encrypt must be a multiple of BLOCK_SIZE in length.  This character is
-   # used to ensure that your value is always a multiple of BLOCK_SIZE
-   PADDING = '{'
+# the character used for padding--with a block cipher such as AES, the value
+# you encrypt must be a multiple of BLOCK_SIZE in length.  This character is
+# used to ensure that your value is always a multiple of BLOCK_SIZE
+      PADDING = '{'
 
-   # one-liner to sufficiently pad the text to be encrypted
-   pad = lambda s: s + (BLOCK_SIZE - len(s) % BLOCK_SIZE) * PADDING
+# one-liner to sufficiently pad the text to be encrypted
+      pad = lambda s: s + (BLOCK_SIZE - len(s) % BLOCK_SIZE) * PADDING
 
-   # one-liners to encrypt/encode and decrypt/decode a string
-   # encrypt with AES, encode with base64
-   EncodeAES = lambda c, s: base64.b64encode(c.encrypt(pad(s)))
-   DecodeAES = lambda c, e: c.decrypt(base64.b64decode(e)).rstrip(PADDING)
+# one-liners to encrypt/encode and decrypt/decode a string
+# encrypt with AES, encode with base64
+      EncodeAES = lambda c, s: base64.b64encode(c.encrypt(pad(s)))
+      DecodeAES = lambda c, e: c.decrypt(base64.b64decode(e)).rstrip(PADDING)
 
-   # create a cipher object using the random secret
-   cipher = AES.new(secret)
+# create a cipher object using the random secret
+      cipher = AES.new(self.secret)
 
-   if encdec == 'enc':
-      # encode a string
-      encoded = EncodeAES(cipher, data)
-      return encoded
+      if encdec == 'enc':
+ # encode a string
+         encoded = EncodeAES(cipher, self.data)
+         return encoded
 
-   if encdec == 'dec':
-      # decode the encoded string
-      decoded = DecodeAES(cipher, data)
-      return decoded
+      if encdec == 'dec':
+# decode the encoded string
+         decoded = DecodeAES(cipher, self.data)
+         return decoded
+
+   def server(self):
+      '''
+########################################################################################
+#       recv aes encypted data
+#
+      '''
+      recvlist = []
+      try:
+         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+         s.bind((self.host, self.port))
+         s.listen(1)
+         log(0, "jadm server was bind to '%s:%s' address" % (self.host, self.port), 1)
+      except:
+         log(2, "jadm cant bind '%s:%s' address" % (self.host, self.port), 1)
+         return False
+
+# start recv. data
+      conn, addr = s.accept()
+      log(0, "jadm server is connected by: '%s'" % addr, 1)
+
+# REC text list (jail config)
+      mig_data= []
+      while True:
+# REC
+         data = conn.recv(1024)
+# DEC
+         decData = self.aes(data, self.secret, 'dec')
+         mig_data.append(decData)
+         if 'closeconn' in decData:
+            s.shutdown(socket.SHUT_RDWR)
+            s.close()
+            mig_data[-1] = addr[0]
+            return mig_data
+         conn.send(data)
+
+   def client(self):
+      '''
+########################################################################################
+#       send aes encrypted data
+#
+      '''
+# ENC
+      if len(self.secret) != 16:
+         return log(2, "server password should be 16 symbols, current is: %s" % len(self.secret))
+      try:
+         cs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+         cs.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+         cs.connect((self.host, self.port))
+      except socket.error:
+         log(2, "no connection to %s:%s" % (self.host, self.port))
+         return '1'
+# ENC and SEND
+# send jail config
+      for i in self.data:
+         encData = self.aes(i, self.secret, 'enc')
+         cs.send(encData)
+         encData = cs.recv(1024)
+
+      cs.shutdown(socket.SHUT_RDWR)
+      cs.close()
+      msg = "       INFO: jadm client> transfer to '%s' was finished" % HOST
+      return '0'
 
 ########################################################################################
 # MAIN MENU
@@ -2583,6 +2659,20 @@ class lcmd(cmd.Cmd):
                             if f.startswith(text)
                             ]
         return completions
+
+   def do_server(self, arg):
+        """  Enter in Jail
+        - usage: server
+        """
+        arg = str(arg).split(' ')
+        arg = [i for i in arg if i != '']
+
+        server = net(arg[0], arg[1], arg[2])
+# Create new server threads
+        thServer = threading.Thread(target=server.server())
+   #     thServer.daemon = True
+        thServer.start()
+
 
 ########################################################################################
 # Start Jadm script
