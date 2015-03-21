@@ -2154,7 +2154,7 @@ def jail_shell(jnid = None):
 
    log(0, "Exit from '%s' jail!" % j['name'])
 
-class jail_zfs_snap():
+class jail_zfs_snap:
    """
 ########################################################################################
 #  list, create or remove zfs jail snapshots
