@@ -2292,7 +2292,7 @@ class net:
       '''
 ########################################################################################
 #       recv aes encypted data
-#       http://www.binarytides.com/python-socket-server-code-example/
+#
       '''
 #     gen random enc password 'pwd'
       pwd = ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for _ in range(16))
