@@ -46,11 +46,12 @@ import netifaces
 import cmd
 # network server
 from Crypto.Cipher import AES
-import SocketServer
 import base64
 import threading
 import paramiko
 import socket
+import string
+import random
 
 ########################################################################################
 # Main config vars:
@@ -2275,27 +2276,79 @@ class jail_zfs_snap:
 # MIGRATION BETWEEN HOSTS
 ########################################################################################
 
-class tcp_server(SocketServer.BaseRequestHandler):
-
-   def handle(self):
-      redata = self.request.recv(1024)
-      self.request.sendall(redata)
-
-class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
-   pass
-
 class net:
 
    def __init__(self, host = None, port = None, secret = None, data = None):
        self.host = host
-       try:
-          self.port = int(port)
-       except:
-          return False
+       self.port = int(port)
        self.secret = secret
        self.data = data
 
-   def aes(self, encdec):
+   def ranpass(self, size=16, chars=string.ascii_uppercase + string.digits):
+      return
+
+   def server(self):
+      '''
+########################################################################################
+#       recv aes encypted data
+#     http://www.binarytides.com/python-socket-server-code-example/
+      '''
+#     gen random enc password 'pwd'
+      pwd = ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for _ in range(16))
+      decData = 'connected'
+
+      try:
+         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+         s.bind((self.host, self.port))
+         s.listen(1)
+         log(0, "jadm server was bind to '%s:%s' with pass: %s" % (self.host, self.port, pwd), 1)
+      except:
+         log(2, "jadm cant bind '%s:%s' address" % (self.host, self.port), 1)
+         return False
+
+# start recv. data
+      conn, addr = s.accept()
+      log(0, "jadm server is connected by: '%s:%s'" % (addr[0], addr[1]), 1)
+
+# REC text list (jail config)
+
+      data = conn.recv(1024)
+# DEC
+      decData = self.aes(pwd, 'dec', data)
+      conn.send(data)
+      print  decData
+      s.shutdown(socket.SHUT_RDWR)
+      s.close()
+
+   def client(self):
+      '''
+########################################################################################
+#       send aes encrypted data
+#
+      '''
+# ENC
+      if len(self.secret) != 16:
+         return log(2, "server password should be 16 symbols, current is: %s" % len(self.secret))
+
+      try:
+         cs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+         cs.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+         cs.connect((self.host, self.port))
+      except socket.error:
+         log(2, "no connection to %s:%s" % (self.host, self.port))
+         return '1'
+# ENC and SEND
+# send jail config
+      encData = self.aes(self.secret, 'enc', self.data)
+      cs.send(encData)
+      encData = cs.recv(1024)
+      cs.shutdown(socket.SHUT_RDWR)
+      cs.close()
+      log(0, "transfer to '%s' was finished!" % self.host, 1)
+      return '0'
+
+   def aes(self, secret, encdec, data):
       '''
 ########################################################################################
 #   Original src: http://www.codekoala.com/posts/aes-encryption-python-using-pycrypto/
@@ -2318,66 +2371,17 @@ class net:
       DecodeAES = lambda c, e: c.decrypt(base64.b64decode(e)).rstrip(PADDING)
 
 # create a cipher object using the random secret
-      cipher = AES.new(self.secret)
+      cipher = AES.new(secret)
 
       if encdec == 'enc':
  # encode a string
-         encoded = EncodeAES(cipher, self.data)
+         encoded = EncodeAES(cipher, data)
          return encoded
 
       if encdec == 'dec':
 # decode the encoded string
-         decoded = DecodeAES(cipher, self.data)
+         decoded = DecodeAES(cipher, data)
          return decoded
-
-   def server(self):
-      '''
-########################################################################################
-#       recv aes encypted data
-#
-      '''
-
-
-# start recv. data
-      conn, addr = s.accept()
-      log(0, "jadm server is connected by: '%s'" % addr, 1)
-
-# REC
-      data = conn.recv(1024)
-      conn.send(data)
-# DEC
-      decData = self.aes(data, self.secret, 'dec')
-      if 'closeconn' in decData:
-          server.shutdown()
-      return decData
-
-   def client(self):
-      '''
-########################################################################################
-#       send aes encrypted data
-#
-      '''
-# ENC
-      if len(self.secret) != 16:
-         return log(2, "server password should be 16 symbols, current is: %s" % len(self.secret))
-      try:
-         cs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-         cs.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-         cs.connect((self.host, self.port))
-      except socket.error:
-         log(2, "no connection to %s:%s" % (self.host, self.port))
-         return '1'
-# ENC and SEND
-# send jail config
-      for i in self.data:
-         encData = self.aes(i, self.secret, 'enc')
-         cs.send(encData)
-         encData = cs.recv(1024)
-
-      cs.shutdown(socket.SHUT_RDWR)
-      cs.close()
-      msg = "       INFO: jadm client> transfer to '%s' was finished" % HOST
-      return '0'
 
 ########################################################################################
 # MAIN MENU
@@ -2663,20 +2667,24 @@ class lcmd(cmd.Cmd):
         arg = str(arg).split(' ')
         arg = [i for i in arg if i != '']
 
-        try:
-           server = ThreadedTCPServer((arg[0], arg[1]),tcp_server)
-           ip, port = server.server_address
-# Start a thread with the server -- that thread will then start one
-# more thread for each request
-           server_thread = threading.Thread(target=server.serve_forever)
-# Exit the server thread when the main thread terminates
-           server_thread.daemon = True
-           server_thread.start()
-           log(0, "jadm server was bind to '%s:%s' address" % (ip, port), 1)
-        except:
-           log(2, "jadm cant bind '%s:%s' address" % (ip, port), 1)
-           return False
+        ip = LHOST
+        port = LPORT
 
+        jserver = net(ip, port)
+
+        server_thread = threading.Thread(target=jserver.server())
+        server_thread.daemon = True
+        server_thread.start()
+
+   def do_client(self, arg):
+        """  Enter in Jail
+        - usage: server
+        """
+        arg = str(arg).split(' ')
+        arg = [i for i in arg if i != '']
+
+        jclient = net(arg[0], arg[1], arg[2], arg[3])
+        jclient.client()
 
 ########################################################################################
 # Start Jadm script
