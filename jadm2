@@ -47,11 +47,12 @@ import cmd
 # network server
 from Crypto.Cipher import AES
 import base64
+import string
+import random
 import threading
 import paramiko
 import socket
-import string
-import random
+import select
 
 ########################################################################################
 # Main config vars:
@@ -2291,34 +2292,63 @@ class net:
       '''
 ########################################################################################
 #       recv aes encypted data
-#     http://www.binarytides.com/python-socket-server-code-example/
+#       http://www.binarytides.com/python-socket-server-code-example/
       '''
 #     gen random enc password 'pwd'
       pwd = ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for _ in range(16))
-      decData = 'connected'
+
+      CONNECTION_LIST = []    # list of socket clients
+      RECV_BUFFER = 4096 # Advisable to keep it as an exponent of 2
 
       try:
          s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
          s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
          s.bind((self.host, self.port))
-         s.listen(1)
+         s.listen(10)
          log(0, "jadm server was bind to '%s:%s' with pass: %s" % (self.host, self.port, pwd), 1)
       except:
          log(2, "jadm cant bind '%s:%s' address" % (self.host, self.port), 1)
          return False
 
-# start recv. data
-      conn, addr = s.accept()
-      log(0, "jadm server is connected by: '%s:%s'" % (addr[0], addr[1]), 1)
+# Add server socket to the list of readable connections
+      CONNECTION_LIST.append(s)
 
-# REC text list (jail config)
+      while 1:
+# Get the list sockets which are ready to be read through select
+         read_sockets,write_sockets,error_sockets = select.select(CONNECTION_LIST,[],[])
+         for sock in read_sockets:
+#New connection
+            if sock == s:
+                # Handle the case in which there is a new connection recieved through server_socket
+                sockfd, addr = s.accept()
+                CONNECTION_LIST.append(sockfd)
+                log(0, "jadm server is connected by: '%s:%s'" % (addr[0], addr[1]), 1)
+#Some incoming message from a client
+            else:
+# Data recieved from client, process it
+                try:
+#In Windows, sometimes when a TCP program closes abruptly,
+# a "Connection reset by peer" exception will be thrown
+                    data = sock.recv(RECV_BUFFER)
+                    decData = self.aes(pwd, 'dec', data)
+                    # echo back the client message
+                    if data:
+# shutdown server if receive 'closecon'
+                        if decData == 'closecon':
+                           log(1, "jadm server was stopped by '%s:%s'!" % (addr[0], addr[1]), 1)
+                           s.close()
+                           return False
 
-      data = conn.recv(1024)
-# DEC
-      decData = self.aes(pwd, 'dec', data)
-      conn.send(data)
-      print  decData
-      s.shutdown(socket.SHUT_RDWR)
+                        print "local server will do: %s" % decData
+                        sock.send(data)
+# client disconnected, so remove from socket list
+                except:
+                    broadcast_data(sock, "Jadm client (%s, %s) is offline" % addr)
+                    log(2, "'%s:%s' client is offline!" % (addr[0], addr[1]), 1)
+                    sock.close()
+                    CONNECTION_LIST.remove(sock)
+                    continue
+# close socket server
       s.close()
 
    def client(self):
@@ -2671,10 +2701,9 @@ class lcmd(cmd.Cmd):
         port = LPORT
 
         jserver = net(ip, port)
-
-        server_thread = threading.Thread(target=jserver.server())
-        server_thread.daemon = True
-        server_thread.start()
+        t = threading.Thread(target=jserver.server)
+        t.daemon = True
+        t.start()
 
    def do_client(self, arg):
         """  Enter in Jail
