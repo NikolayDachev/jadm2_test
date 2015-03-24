@@ -1,4 +1,4 @@
-__author__ = 'dako'
+#!/usr/bin/env python
 
 import sys
 import os
@@ -11,7 +11,11 @@ import random
 import socket
 import select
 
-logfile = "aesnetserver.log"
+logfile = "/tmp/aesnetserver.log"
+host = '0.0.0.0'
+port = 4555
+secret = None
+data = None
 
 class AesNetServer:
 
@@ -19,9 +23,7 @@ class AesNetServer:
        self.host = host
        self.port = int(port)
        self.secret = secret
-       if cmdname:
-          self.data = cmdname[0]
-          self.binfile = cmdname[1]
+       self.data = cmdname
 
    def server(self):
       '''
@@ -41,9 +43,9 @@ class AesNetServer:
          s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
          s.bind((self.host, self.port))
          s.listen(10)
-         log(0, "server was bind to '%s:%s' with pass: %s" % (self.host, self.port, pwd), 1)
+         self.log(0, "server was bind to '%s:%s' with pass: %s" % (self.host, self.port, pwd), 1)
       except:
-         log(2, "cant bind '%s:%s' address" % (self.host, self.port), 1)
+         self.log(2, "cant bind '%s:%s' address" % (self.host, self.port), 1)
          return False
 
 # Add server socket to the list of readable connections
@@ -62,40 +64,43 @@ class AesNetServer:
 #Some incoming message from a client
             else:
 # Data recieved from client, process it
-                try:
+      #          try:
 #In Windows, sometimes when a TCP program closes abruptly,
 # a "Connection reset by peer" exception will be thrown
-                    self.data = sock.recv(self.RECV_BUFFER)
-                    self.decData = self.aes(pwd, 'dec', self.data)
+                    recvdata = sock.recv(self.RECV_BUFFER)
+                    self.decData = self.aes(pwd, 'dec', recvdata)
                     # echo back the client message
-                    if self.data:
-# shutdown server if receive 'closecon'
-                        if self.decData == 'closecon':
-                           self.log(1, "server was stopped by '%s:%s'!" % (addr[0], addr[1]), 1)
-                           s.close()
-                           return False
-
+                    if recvdata:
                         if isbin == 1:
-                           buf = open('%s' % self.name, 'w')
+                           buf = open('/tmp/%s' % self.name, 'w')
                            buf.write(self.decData)
                            buf.close()
 
                         else:
                            data = self.decData.split(' ')
 
-                        if self.decData == 'isbin':
-                            isbin = 1
+# shutdown server if receive 'closecon'
+                           if data[-1] == 'closecon':
+                              self.log(1, "server was stopped by '%s:%s'!" % (addr[0], addr[1]), 1)
+                              s.close()
+                              return False
 
-                        if self.decData == 'no_isbin':
-                            isbin = 0
+                           elif data[0] == 'binfile':
+                              isbin = 1
+                              self.name = data[1]
+                           elif data[0] == 'no_binfile':
+                              isbin = 0
+                           else:
+                              for i in data:
+                                 print "recv data: %s" % i
 
-                        sock.send(self.data)
+                        sock.send(recvdata)
 # client disconnected, so remove from socket list
-                except:
-                    self.log(2, "'%s:%s' client is offline!" % (addr[0], addr[1]), 1)
-                    sock.close()
-                    CONNECTION_LIST.remove(sock)
-                    continue
+     #           except:
+     #               self.log(2, "'%s:%s' client is offline!" % (addr[0], addr[1]), 1)
+     #               sock.close()
+     #               CONNECTION_LIST.remove(sock)
+     #               continue
 
 # close socket server
       s.close()
@@ -118,27 +123,26 @@ class AesNetServer:
          self.log(2, "no connection to %s:%s" % (self.host, self.port))
          return '1'
 # ENC and SEND
-# send jadm cmd
 
-      encData = self.aes(self.secret, 'enc', self.data)
+      encData = self.aes(self.secret, 'enc', ' '.join(self.data))
 # send bin file
-      if self.data == "binfile":
-         self.log(0, "transfer '%s' to '%s:%s'" % (self.binfile, self.host, self.remote_path))
-         send_file = open(self.binfile, "rb")
+      self.cs.send(encData)
+      rcvData = self.cs.recv(1024)
+
+      if self.data[0] == "binfile":
+         self.log(0, "transfer '%s' to '%s'" % (self.data[2], self.host))
+         send_file = open(self.data[2], "rb")
          while True:
             chunk = send_file.read(65536)
             encData = self.aes(self.secret, 'enc', chunk)
             if not chunk:
+               self.data[0] == "no_binfile"
                break  # EOF
             self.cs.sendall(encData)
-
-      self.cs.send(encData)
-      rcvData = self.cs.recv(1024)
 
       self.cs.shutdown(socket.SHUT_RDWR)
       self.cs.close()
       self.log(0, "transfer to '%s' was finished!" % self.host, 1)
-      return '0'
 
    def aes(self, secret, encdec, data):
       '''
@@ -193,3 +197,28 @@ class AesNetServer:
             logging.warning(msg)
          if ltype == 2:
             logging.error('  %s' % msg)
+
+if '__main__' == __name__:
+
+    if len(sys.argv) < 2:
+        sys.exit(2)
+
+    if len(sys.argv) >= 3:
+        host = sys.argv[2]
+    if len(sys.argv) >= 4:
+        port = int(sys.argv[3])
+    if len(sys.argv) >= 5:
+        secret = sys.argv[4]
+    if len(sys.argv) >= 6:
+        data = sys.argv[5:]
+
+    if sys.argv[1] == 'server':
+        ans = AesNetServer(host, port)
+        ans.server()
+
+    elif sys.argv[1] == 'client':
+        ans = AesNetServer(host, port, secret, data)
+        ans.client()
+
+    else:
+        sys.exit(2)
