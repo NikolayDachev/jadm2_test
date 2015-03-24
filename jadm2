@@ -2346,6 +2346,7 @@ class net:
 
                         data = self.decData.split(' ')
 # check and create path for new migrated jail
+
                         if data[0] == 'path':
                             subprocess.call(['mkdir', '-p', '%s' % (data[1])])
                             log(0, "'%s' was create by '%s:%s'" % (addr[0], addr[1]), 1)
