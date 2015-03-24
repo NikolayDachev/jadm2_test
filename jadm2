@@ -2345,15 +2345,9 @@ class net:
                            s.close()
                            return False
 
-                        if self.decData == 'binfile':
-                            isbin = 1
-
-                        if self.decData == 'no_binfile':
-                            isbin = 0
-
                         if isbin == 1:
                            buf = open('%s/migrated_%s' % (self.migpath, self.migname), 'w')
-                           buf.write(decData)
+                           buf.write(self.decData)
                            buf.close()
 
                         else:
@@ -2365,6 +2359,12 @@ class net:
                               if check_jail_Setting('path', data[2]) != False:
                                  subprocess.call(['mkdir', '-p', '%s' % (data[2])])
                                  log(0, "'%s' was create by '%s:%s'" % (data[2], addr[0], addr[1]), 1)
+
+                        if self.decData == 'isbin':
+                            isbin = 1
+
+                        if self.decData == 'no_isbin':
+                            isbin = 0
 
                         sock.send(self.data)
 # client disconnected, so remove from socket list
@@ -2464,6 +2464,9 @@ class net:
 
 # announce jail migration
       self.data = 'jail %s %s/%s' %  (jail['name'], self.remote_path, jail['name'])
+      self.client()
+
+      self.data = "isbin"
       self.client()
 
       self.data = "binfile"
