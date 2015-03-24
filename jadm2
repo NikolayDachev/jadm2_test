@@ -2209,7 +2209,7 @@ class jail_zfs_snap:
       try:
           os.system("zfs snapshot "+jzsnap)
           log(0, "zfs snap '%s' was created for '%s'!" % (jzsnap, self.jail['name']), 1)
-          return True
+          return jzsnap
       except:
           log(2, "jadm was not able to create '%s' zfs snap for '%s'!" % (jzsnap, self.jail['name']), 1)
           return False
@@ -2279,14 +2279,13 @@ class jail_zfs_snap:
 
 class net:
 
-   def __init__(self, host = None, port = None, secret = None, data = None):
+   def __init__(self, host = None, port = None, secret = None, cmdname = None):
        self.host = host
        self.port = int(port)
        self.secret = secret
-       self.data = data
-
-   def ranpass(self, size=16, chars=string.ascii_uppercase + string.digits):
-      return
+       if cmdname:
+          self.data = cmdname[0]
+          self.binfile = cmdname[1]
 
    def server(self):
       '''
@@ -2333,6 +2332,9 @@ class net:
                     decData = self.aes(pwd, 'dec', data)
                     # echo back the client message
                     if data:
+# check if we will start to recv bin file (tar jail)
+                        if decData == 'binfile':
+                           binfile()
 # shutdown server if receive 'closecon'
                         if decData == 'closecon':
                            log(1, "jadm server was stopped by '%s:%s'!" % (addr[0], addr[1]), 1)
@@ -2351,6 +2353,19 @@ class net:
 # close socket server
       s.close()
 
+   def binfile(self):
+      '''
+########################################################################################
+#       recv bin data
+#
+      '''
+      data = sock.recv(RECV_BUFFER)
+      if data:
+         decData = self.aes(pwd, 'dec', data)
+         buf = open('received-container.tar.gz', 'w')
+         buf.write(decData)
+         buf.close()
+
    def client(self):
       '''
 ########################################################################################
@@ -2362,21 +2377,78 @@ class net:
          return log(2, "server password should be 16 symbols, current is: %s" % len(self.secret))
 
       try:
-         cs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-         cs.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-         cs.connect((self.host, self.port))
+         self.cs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+         self.cs.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+         self.cs.connect((self.host, self.port))
       except socket.error:
          log(2, "no connection to %s:%s" % (self.host, self.port))
          return '1'
 # ENC and SEND
-# send jail config
+# imgrate jail
+      if self.data == 'migrate':
+         self.migrate_client(self.binfile)
+# send jadm cmd
       encData = self.aes(self.secret, 'enc', self.data)
-      cs.send(encData)
-      encData = cs.recv(1024)
-      cs.shutdown(socket.SHUT_RDWR)
-      cs.close()
+      self.cs.send(encData)
+      encData = self.cs.recv(1024)
+# send bin file
+      if self.data == "binfile":
+         send_file = open(self.binfile, "rb")
+
+         while True:
+            chunk = send_file.read(65536)
+            encData = self.aes(self.secret, 'enc', chunk)
+            if not chunk:
+               encData = self.aes(self.secret, 'enc', 'EOF')
+               self.cs.send(encData)
+               break  # EOF
+            self.cs.sendall(encData)
+
+      self.cs.shutdown(socket.SHUT_RDWR)
+      self.cs.close()
       log(0, "transfer to '%s' was finished!" % self.host, 1)
       return '0'
+
+   def migrate_client(self, jail):
+
+      jails = load_jail_config(jailconf)[0]
+
+# find modify jail
+      for i in jails:
+       if i['name'] == jail:
+           jail = i
+           break
+
+# if this jail i running
+      if jail['active'] == 1:
+         log(2, "jail '%s' is running and cannot be migrated!" % jail['name'])
+         return False
+
+# create tar file without encription
+      log(0, "jail '%s' will be migrated to %s:%s!" % (jail['name'], self.host, self.port), 1)
+      try:
+         if jail['zfs'] == 0:
+             mfile = '%s/../migration_back_%s.tar.gz' % (jail['path'], jail['name'])
+             os.system('tar -czf %s %s' % (mfile, jail['path']))
+         else:
+             mfile = '%s/migration_back_%s.zfs' % (jail['path'], jail['name'])
+             jsnap = jail_zfs_snap()
+             zfssnap = jsnap.create(jail['name'])
+             os.system('zfs send %s > %s' % (zfssnap, mfile))
+             os.system('zfs destroy -rf %s' % (zfssnap))
+
+         log(0, "%s was created!" % (mfile))
+      except:
+             log(2, "jadm cannot create '%s' file!" % mfile, 1)
+             return False
+
+
+# anonce jail migration
+      encData = self.aes(self.secret, 'enc', 'migrate')
+      self.cs.send(encData)
+
+   def migrate_server(self):
+       pass
 
    def aes(self, secret, encdec, data):
       '''
@@ -2712,7 +2784,7 @@ class lcmd(cmd.Cmd):
         arg = str(arg).split(' ')
         arg = [i for i in arg if i != '']
 
-        jclient = net(arg[0], arg[1], arg[2], arg[3])
+        jclient = net(arg[0], arg[1], arg[2], arg[3:])
         jclient.client()
 
 ########################################################################################
