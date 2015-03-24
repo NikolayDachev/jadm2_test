@@ -2287,6 +2287,12 @@ class net:
           self.data = cmdname[0]
           self.binfile = cmdname[1]
 
+   def find_jail(self, jnid):
+# check if jail exist
+      self.jail = check_jail_Setting('modify', jnid)
+      if self.jail == False:
+         return False
+
    def server(self):
       '''
 ########################################################################################
@@ -2328,24 +2334,26 @@ class net:
                 try:
 #In Windows, sometimes when a TCP program closes abruptly,
 # a "Connection reset by peer" exception will be thrown
-                    data = sock.recv(RECV_BUFFER)
-                    decData = self.aes(pwd, 'dec', data)
+                    self.data = sock.recv(RECV_BUFFER)
+                    self.decData = self.aes(pwd, 'dec', self.data)
                     # echo back the client message
-                    if data:
-# check if we will start to recv bin file (tar jail)
-                        if decData == 'binfile':
-                           binfile()
+                    if self.data:
 # shutdown server if receive 'closecon'
-                        if decData == 'closecon':
+                        if self.decData == 'closecon':
                            log(1, "jadm server was stopped by '%s:%s'!" % (addr[0], addr[1]), 1)
                            s.close()
                            return False
 
-                        print "local server will do: %s" % decData
-                        sock.send(data)
+                        data = self.decData.split(' ')
+# check and create path for new migrated jail
+                        if data[0] == 'path':
+                            subprocess.call(['mkdir', '-p', '%s' % (data[1])])
+                            log(0, "'%s' was create by '%s:%s'" % (addr[0], addr[1]), 1)
+
+                        print data
+                        sock.send(self.data)
 # client disconnected, so remove from socket list
                 except:
-                    broadcast_data(sock, "Jadm client (%s, %s) is offline" % addr)
                     log(2, "'%s:%s' client is offline!" % (addr[0], addr[1]), 1)
                     sock.close()
                     CONNECTION_LIST.remove(sock)
@@ -2384,9 +2392,6 @@ class net:
          log(2, "no connection to %s:%s" % (self.host, self.port))
          return '1'
 # ENC and SEND
-# imgrate jail
-      if self.data == 'migrate':
-         self.migrate_client(self.binfile)
 # send jadm cmd
       encData = self.aes(self.secret, 'enc', self.data)
       self.cs.send(encData)
@@ -2409,11 +2414,23 @@ class net:
       log(0, "transfer to '%s' was finished!" % self.host, 1)
       return '0'
 
-   def migrate_client(self, jail):
-
+   def migrate_client(self):
+      '''
+########################################################################################
+#   migrate jail from localhost to remote host
+#
+      '''
       jails = load_jail_config(jailconf)[0]
+      if self.find_jail(self.data) == False:
+          return False
+      remote_path = self.binfile
 
-# find modify jail
+      if '/' not in remote_path:
+          log(2, "'%s' is a not valid os path for '%s'!" % (remote_path, self.host), 1)
+          return False
+
+      jail = self.jail
+# find jail
       for i in jails:
        if i['name'] == jail:
            jail = i
@@ -2425,13 +2442,13 @@ class net:
          return False
 
 # create tar file without encription
-      log(0, "jail '%s' will be migrated to %s:%s!" % (jail['name'], self.host, self.port), 1)
+      log(0, "jail '%s' will be migrated to '%s:%s/%s'!" % (jail['name'], self.host, remote_path, jail['name']), 1)
       try:
          if jail['zfs'] == 0:
              mfile = '%s/../migration_back_%s.tar.gz' % (jail['path'], jail['name'])
-             os.system('tar -czf %s %s' % (mfile, jail['path']))
+             os.system('tar czPf %s %s' % (mfile, jail['path']))
          else:
-             mfile = '%s/migration_back_%s.zfs' % (jail['path'], jail['name'])
+             mfile = '%s/../migration_back_%s.zfs' % (jail['path'], jail['name'])
              jsnap = jail_zfs_snap()
              zfssnap = jsnap.create(jail['name'])
              os.system('zfs send %s > %s' % (zfssnap, mfile))
@@ -2442,13 +2459,9 @@ class net:
              log(2, "jadm cannot create '%s' file!" % mfile, 1)
              return False
 
-
-# anonce jail migration
-      encData = self.aes(self.secret, 'enc', 'migrate')
-      self.cs.send(encData)
-
-   def migrate_server(self):
-       pass
+# announce jail migration
+      self.data = 'path %s/%s' %  (remote_path, jail['name'])
+      self.client()
 
    def aes(self, secret, encdec, data):
       '''
@@ -2779,13 +2792,23 @@ class lcmd(cmd.Cmd):
 
    def do_client(self, arg):
         """  Enter in Jail
-        - usage: server
+        - usage: client
         """
         arg = str(arg).split(' ')
         arg = [i for i in arg if i != '']
 
         jclient = net(arg[0], arg[1], arg[2], arg[3:])
         jclient.client()
+
+   def do_migrate(self, arg):
+        """  Enter in Jail
+        - usage: migrate re.mo.te.ip port sever_pwd 'name/jid' /remote/path
+        """
+        arg = str(arg).split(' ')
+        arg = [i for i in arg if i != '']
+
+        jclient = net(arg[0], arg[1], arg[2], arg[3:])
+        jclient.migrate_client()
 
 ########################################################################################
 # Start Jadm script
