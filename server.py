@@ -36,16 +36,16 @@ class AesNetServer:
 
       CONNECTION_LIST = []    # list of socket clients
       self.RECV_BUFFER = 4096 # Advisable to keep it as an exponent of 2
-      isbin = 0
+      bin = 0
 
       try:
          s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
          s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
          s.bind((self.host, self.port))
          s.listen(10)
-         self.log(0, "server was bind to '%s:%s' with pass: %s" % (self.host, self.port, pwd), 1)
+         self.log(0, "aes net server: > bind to '%s:%s' with pass: %s" % (self.host, self.port, pwd), 1)
       except:
-         self.log(2, "cant bind '%s:%s' address" % (self.host, self.port), 1)
+         self.log(2, "aes net server: > cant bind '%s:%s' address" % (self.host, self.port), 1)
          return False
 
 # Add server socket to the list of readable connections
@@ -60,20 +60,23 @@ class AesNetServer:
                 # Handle the case in which there is a new connection recieved through server_socket
                 sockfd, addr = s.accept()
                 CONNECTION_LIST.append(sockfd)
-                self.log(0, "server is connected by: '%s:%s'" % (addr[0], addr[1]), 1)
+                self.log(0, "aes net server: > connected by: '%s:%s'" % (addr[0], addr[1]), 1)
 #Some incoming message from a client
             else:
 # Data recieved from client, process it
-      #          try:
-                    if isbin == 1:
+                try:
+                    if bin == 1:
                           while True:
                              recvdata = sock.recv(self.RECV_BUFFER)
                              if not recvdata:
+                                 bin = 0
+                                 buf.close()
                                  break
-                             self.decData = self.aes(pwd, 'dec', recvdata)
-                             buf.write(self.decData)
-                          isbin = 0
-                          buf.close()
+                             #self.decData = self.aes(pwd, 'dec', recvdata)
+                             buf.write(recvdata)
+                          self.log(0, "aes net server: > '%s' receive from '%s:%s' was completed successful!" % (self.recname, addr[0], addr[1]), 1)
+                          sock.sendall(recvdata)
+                          continue
                     else:
 #In Windows, sometimes when a TCP program closes abruptly,
 # a "Connection reset by peer" exception will be thrown
@@ -82,27 +85,28 @@ class AesNetServer:
 # echo back the client message
                        if recvdata:
                            data = self.decData.split(' ')
-
+                           print data[0]
 # shutdown server if receive 'closecon'
                            if data[-1] == 'closecon':
-                              self.log(1, "server was stopped by '%s:%s'!" % (addr[0], addr[1]), 1)
+                              self.log(1, "aes net server: > stopped by '%s:%s'!" % (addr[0], addr[1]), 1)
                               s.close()
                               return False
 
-                           elif data[0] == 'binfile':
-                              isbin = 1
-                              buf = open('/tmp/%s' % data[1], 'wb')
+                           elif data[0] in ['-b', '-B']:
+                              bin = 1
+                              self.recname = data[1]
+                              buf = open('%s' % self.recname, 'wb')
                            else:
                               for i in data:
-                                 print "recv data: %s" % i
+                                 print "txt data: > %s" % i
 
-                    sock.send(recvdata)
+                    sock.sendall(recvdata)
 # client disconnected, so remove from socket list
-     #           except:
-     #               self.log(2, "'%s:%s' client is offline!" % (addr[0], addr[1]), 1)
-     #               sock.close()
-     #               CONNECTION_LIST.remove(sock)
-     #               continue
+                except:
+                    self.log(2, "aes net server: > '%s:%s' client is offline!" % (addr[0], addr[1]), 1)
+                    sock.close()
+                    CONNECTION_LIST.remove(sock)
+                    continue
 
 # close socket server
       s.close()
@@ -115,35 +119,35 @@ class AesNetServer:
       '''
 # ENC
       if len(self.secret) != 16:
-         return self.log(2, "server password should be 16 symbols, current is: %s" % len(self.secret))
+         return self.log(2, "client: > server password should be 16 symbols, current is: %s" % len(self.secret))
 
       try:
          self.cs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
          self.cs.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
          self.cs.connect((self.host, self.port))
       except socket.error:
-         self.log(2, "no connection to %s:%s" % (self.host, self.port))
+         self.log(2, "aes net client: > no connection to %s:%s" % (self.host, self.port))
          return '1'
 # ENC and SEND
 
       encData = self.aes(self.secret, 'enc', ' '.join(self.data))
-# send bin file
       self.cs.send(encData)
-      rcvData = self.cs.recv(1024)
+      rcvData = self.cs.recv(4096)
 
-      if self.data[0] == "binfile":
-         self.log(0, "transfer '%s' to '%s'" % (self.data[2], self.host))
+# send bin file
+      if data[0] in ['-b', '-B']:
+         self.log(0, "aes net client: > transfer '%s' to '%s'" % (self.data[2], self.host))
          send_file = open(self.data[2], "rb")
          while True:
             chunk = send_file.read(4096)
             if not chunk:
                break  # EOF
-            encData = self.aes(self.secret, 'enc', chunk)
-            self.cs.sendall(encData)
+            # encData = self.aes(self.secret, 'enc', chunk)
+            self.cs.sendall(chunk)
 
       self.cs.shutdown(socket.SHUT_RDWR)
       self.cs.close()
-      self.log(0, "transfer to '%s' was finished!" % self.host, 1)
+      self.log(0, "aes net client: > transfer to '%s' was finished!" % self.host, 1)
 
    def aes(self, secret, encdec, data):
       '''
@@ -204,14 +208,17 @@ if '__main__' == __name__:
     if len(sys.argv) < 2:
         sys.exit(2)
 
-    if len(sys.argv) >= 3:
-        host = sys.argv[2]
-    if len(sys.argv) >= 4:
-        port = int(sys.argv[3])
-    if len(sys.argv) >= 5:
-        secret = sys.argv[4]
-    if len(sys.argv) >= 6:
-        data = sys.argv[5:]
+    for i in sys.argv:
+        if i in ['-h', '-H']:
+            host = sys.argv[sys.argv.index(i) + 1]
+        if i in ['-p', '-P']:
+            port = sys.argv[sys.argv.index(i) + 1]
+        if i in ['-s', '-S']:
+            secret = sys.argv[sys.argv.index(i) + 1]
+        if i in ['-h', '-H']:
+            host = sys.argv[sys.argv.index(i) + 1]
+        if i in ['-b', '-B', '-t', '-T']:
+            data = sys.argv[sys.argv.index(i):]
 
     if sys.argv[1] == 'server':
         ans = AesNetServer(host, port)
