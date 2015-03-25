@@ -65,18 +65,22 @@ class AesNetServer:
             else:
 # Data recieved from client, process it
       #          try:
+                    if isbin == 1:
+                          while True:
+                             recvdata = sock.recv(self.RECV_BUFFER)
+                             if not recvdata:
+                                 break
+                             self.decData = self.aes(pwd, 'dec', recvdata)
+                             buf.write(self.decData)
+                          isbin = 0
+                          buf.close()
+                    else:
 #In Windows, sometimes when a TCP program closes abruptly,
 # a "Connection reset by peer" exception will be thrown
-                    recvdata = sock.recv(self.RECV_BUFFER)
-                    self.decData = self.aes(pwd, 'dec', recvdata)
-                    # echo back the client message
-                    if recvdata:
-                        if isbin == 1:
-                           buf = open('/tmp/%s' % self.name, 'w')
-                           buf.write(self.decData)
-                           buf.close()
-
-                        else:
+                       recvdata = sock.recv(self.RECV_BUFFER)
+                       self.decData = self.aes(pwd, 'dec', recvdata)
+# echo back the client message
+                       if recvdata:
                            data = self.decData.split(' ')
 
 # shutdown server if receive 'closecon'
@@ -87,14 +91,12 @@ class AesNetServer:
 
                            elif data[0] == 'binfile':
                               isbin = 1
-                              self.name = data[1]
-                           elif data[0] == 'no_binfile':
-                              isbin = 0
+                              buf = open('/tmp/%s' % data[1], 'wb')
                            else:
                               for i in data:
                                  print "recv data: %s" % i
 
-                        sock.send(recvdata)
+                    sock.send(recvdata)
 # client disconnected, so remove from socket list
      #           except:
      #               self.log(2, "'%s:%s' client is offline!" % (addr[0], addr[1]), 1)
@@ -133,11 +135,10 @@ class AesNetServer:
          self.log(0, "transfer '%s' to '%s'" % (self.data[2], self.host))
          send_file = open(self.data[2], "rb")
          while True:
-            chunk = send_file.read(65536)
-            encData = self.aes(self.secret, 'enc', chunk)
+            chunk = send_file.read(4096)
             if not chunk:
-               self.data[0] == "no_binfile"
                break  # EOF
+            encData = self.aes(self.secret, 'enc', chunk)
             self.cs.sendall(encData)
 
       self.cs.shutdown(socket.SHUT_RDWR)
