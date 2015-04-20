@@ -913,6 +913,8 @@ def jail_input(modify = None):
               prompt = "(%s) :> " % cr_prompt
               if ikey in ['vnet']:
                  ekey = raw_input("is %s jail (y/n) %s" % (ikey, prompt))
+                 if 'y' not in ekey:
+                     break
               else:
                  if ikey == 'zfs':
                     if modjail['zfs'][0] != 'none':
@@ -931,11 +933,11 @@ def jail_input(modify = None):
                     break
            else:
 # main prompt start here
-              if ikey in ['vnet', 'zfs']:
+              if ikey == 'vnet' or ikey == 'zfs':
                  ekey = raw_input("is %s jail (y/n) %s" % (ikey, prompt))
                  if 'y' not in ekey:
                      break
-              if ikey == 'path':
+              elif ikey == 'path':
                  ekey = raw_input('enter jail root %s %s' % (ikey, prompt))
               else:
                  ekey = raw_input('enter jail %s %s' % (ikey, prompt))
