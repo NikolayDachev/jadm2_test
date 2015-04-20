@@ -2147,7 +2147,10 @@ def jail_shell(jnid = None):
        return False
 
 # find jail root shell!
-   root_sheel = subprocess.check_output("head -n3 %s/etc/passwd" % j['path'], shell=True).strip('jid')
+   if 'SKEL' in j.keys():
+      root_sheel = subprocess.check_output("head -n3 %s/mnt/etc/passwd" % j['path'], shell=True).strip('jid')
+   else:
+      root_sheel = subprocess.check_output("head -n3 %s/etc/passwd" % j['path'], shell=True).strip('jid')
    root_sheel = root_sheel.split(':')
 
    log(0, "Enter in '%s' jail!" % j['name'])
@@ -2277,7 +2280,7 @@ class jail_zfs_snap:
 # MIGRATION BETWEEN HOSTS
 ########################################################################################
 
-class net:
+class net_server:
 
    def __init__(self, host = None, port = None, secret = None, cmdname = None):
        self.host = host
@@ -2795,7 +2798,7 @@ class lcmd(cmd.Cmd):
         ip = LHOST
         port = LPORT
 
-        jserver = net(ip, port)
+        jserver = net_server(ip, port)
         t = threading.Thread(target=jserver.server)
         t.daemon = True
         t.start()
@@ -2807,7 +2810,7 @@ class lcmd(cmd.Cmd):
         arg = str(arg).split(' ')
         arg = [i for i in arg if i != '']
 
-        jclient = net(arg[0], arg[1], arg[2], arg[3:])
+        jclient = net_server(arg[0], arg[1], arg[2], arg[3:])
         jclient.client()
 
    def do_migrate(self, arg):
@@ -2817,7 +2820,7 @@ class lcmd(cmd.Cmd):
         arg = str(arg).split(' ')
         arg = [i for i in arg if i != '']
 
-        jclient = net(arg[0], arg[1], arg[2], arg[3:])
+        jclient = net_server(arg[0], arg[1], arg[2], arg[3:])
         jclient.migrate_client()
 
 ########################################################################################
