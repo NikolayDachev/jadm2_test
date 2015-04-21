@@ -522,9 +522,12 @@ def gateways(gwtable = None):
    for i in netifaces.interfaces():
       if 'bridge' in i:
 # fill all lists for bridge
-         bridge_dict['addr'] = netifaces.ifaddresses(i)[netifaces.AF_INET]
-         for x in bridge_dict['addr']:
-            bridges.append({'name':i, 'addr':x})
+         try:
+            bridge_dict['addr'] = netifaces.ifaddresses(i)[netifaces.AF_INET]
+            for x in bridge_dict['addr']:
+               bridges.append({'name':i, 'addr':x})
+         except KeyError:
+            bridges.append({'name':i, 'addr':'0.0.0.0'})
 
 # append os system default gateway
    system = subprocess.check_output('netstat -nr', shell=True)
@@ -540,7 +543,10 @@ def gateways(gwtable = None):
    for i in  bridges:
       if i['name'] == gwname:
           i['name'] = ' '
-      gwlist.append([i['name'], i['addr']['addr'], i['addr']['netmask'], i['addr']['broadcast']])
+      if i['addr'] == '0.0.0.0':
+         gwlist.append([i['name'], 'none', 'none', 'none'])
+      else:
+         gwlist.append([i['name'], i['addr']['addr'], i['addr']['netmask'], i['addr']['broadcast']])
 
 # show gateway table
    if gwtable != None:
