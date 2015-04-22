@@ -1691,10 +1691,11 @@ def BASE(src, path = None):
 # http://www.freebsd.org/doc/en_US.ISO8859-1/books/handbook/jails-application.html
    log(0, 'create SROOT and symlinks!')
    os.chdir('%s' % path)
-   os.system('mkdir -p %s/SROOT/home %s/SROOT/usr-X11R6 %s/SROOT/distfiles %s/SROOT/usr-share-keys/pkg' % (path,  path, path, path))
+   os.system('mkdir -p %s/SROOT/home %s/SROOT/usr-X11R6 %s/SROOT/distfiles %s/SROOT/usr-share-keys' % (path,  path, path, path))
    os.system('mv %s/etc SROOT/' % path)
    os.system('mv %s/usr/local SROOT/usr-local' % path)
-   os.system('mv %s/usr/share/keys SROOT/usr-share-keys' % path)
+   os.system('mv %s/usr/share/keys/* SROOT/usr-share-keys/' % path)
+   os.system('rm -rf %s/usr/share/keys/' % path)
    os.system('mv %s/tmp SROOT/' % path)
    os.system('mv %s/var SROOT/' % path)
    os.system('mv %s/root SROOT/' % path)
