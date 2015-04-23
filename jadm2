@@ -2768,6 +2768,18 @@ class lcmd(cmd.Cmd):
         """
         jail_shell(arg)
 
+   def do_verbose(self, arg):
+        """  Verbose output when start/stop jail
+        - usage: verbose
+        """
+        global verbose
+        if verbose == 0:
+           verbose = 1
+           log(0, "start/stop verbose mode enabled")
+        else:
+           verbose = 0
+           log(0, "start/stop verbose mode disabled")
+
    def do_snap(self, arg):
         """  Enter in Jail
         - usage: shell 'name/jid'
