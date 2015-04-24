@@ -44,6 +44,7 @@ import logging
 import subprocess
 import netifaces
 import cmd
+import copy
 # network server
 from Crypto.Cipher import AES
 import base64
@@ -862,6 +863,7 @@ def jail_input(modify = None):
    """
    load_jails = load_jail_config(jailconf)
    jails, gsettings = load_jails[0], load_jails[1]
+   new_jail = {}
 
    if modify == None:
       prompt = ':> '
@@ -888,7 +890,7 @@ def jail_input(modify = None):
       input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path']
       settings_menu = ['Jail', 'Setting', 'Old Setting']
 # copy jail settings when we modify them
-      new_jail = modjail.copy()
+      new_jail = copy.deepcopy(modjail)
 
    print "----------------------------------------------------"
    print "                %s Jail " % acText
@@ -1060,14 +1062,14 @@ def jail_input(modify = None):
                              log(0, 'user exit - !')
                              return False
                           if  zquota in ['\n', '', ' ', '	']:
-                             new_jail['zfs'][1] = 'none'
+                             new_jail['zfs'][-2] = 'none'
                              break
                           if zquota == 'none':
                               break
                           if  check_jail_Setting('zquota', zquota) == False:
                              continue
                           else:
-                             new_jail['zfs'][1] = zquota
+                             new_jail['zfs'][-2] = zquota
                              break
 # use zfs quota -----------
                  break
@@ -1137,7 +1139,7 @@ def jail_input(modify = None):
           men_jail_settings.append(['Install src:', '%s %s' % (new_jail['install'][0], new_jail['install'][1])])
       if new_jail['zfs'][0] != 'none':
           men_jail_settings.append(['Zfs', new_jail['zfs'][0], modjail['zfs'][0]])
-          men_jail_settings.append(['Zfs Quota', new_jail['zfs'][1], modjail['zfs'][1]])
+          men_jail_settings.append(['Zfs Quota', new_jail['zfs'][-2], modjail['zfs'][-2]])
       print tabulate(men_jail_settings, settings_menu)
       print " "
       yn = raw_input("confirm (y):>")
@@ -1477,9 +1479,9 @@ def modify_jail(newjail):
          subprocess.call(['rm', '-rf', '%s' % modjail['path']])
          log(0, "jail path '%s' was modified to '%s'!" % (modjail['path'], newjail['path']))
 
-      if newjail['zfs'][1] != modjail['zfs'][1]:
-          subprocess.call(['zfs', 'set', 'quota=%s' % newjail['zfs'][1], '%s' % newjail['zfs'][0]])
-          log(0 ,"jail zfs quota '%s' was set for '%s'" % (newjail['zfs'][1], newjail['zfs'][0]))
+      if newjail['zfs'][-2] != modjail['zfs'][-2]:
+          subprocess.call(['zfs', 'set', 'quota=%s' % newjail['zfs'][-2], '%s' % newjail['zfs'][0]])
+          log(0 ,"jail zfs quota '%s' was set for '%s'" % (newjail['zfs'][-2], newjail['zfs'][0]))
 
 # if we change the path
    if move_zfs_path == 0:
