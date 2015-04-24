@@ -1304,7 +1304,7 @@ def check_jail_Setting(setting, val):
 
 # check zfs quota
    if setting == 'zquota':
-      if val[-1] in ('K', 'M', 'G', 'T', 'P', 'E'):
+      if val[-1] in ('K', 'M', 'G', 'T', 'P', 'E') or val == 'none':
          try:
             int(zquota[:-1])
             return True
@@ -1812,7 +1812,7 @@ def jail_input_cli(cliargv):
           modjail['zfs'] = ['none', 'none', 'none']
 #add empty 'install'
        modjail['install'] = ['', '']
-       new_jail = modjail.copy()
+       new_jail = copy.deepcopy(modjail)
 
 # check jail name
    for i in jail.keys():
@@ -1932,7 +1932,7 @@ def jail_input_cli(cliargv):
              if  check_jail_Setting('zquota', jail[i][1]) == False:
                 sys.exit(2)
              else:
-                new_jail['zfs'][1] = jail[i][1]
+                new_jail['zfs'][-2] = jail[i][1]
                 break
 
 # check install src
@@ -1954,9 +1954,11 @@ def jail_input_cli(cliargv):
             log(2, "jail install source was not specified correctly!")
             sys.exit(2)
 
-   print jail
-   print modjail
-   print new_jail
+# debug print :)
+#   print jail
+#   print modjail
+#   print new_jail
+#
 # check if we have changes:
    if '-m' in cliargv:
       modjail_diff = 0
