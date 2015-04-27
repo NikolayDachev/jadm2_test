@@ -54,6 +54,7 @@ import threading
 import paramiko
 import socket
 import select
+import ftplib
 
 ########################################################################################
 # Main config vars:
@@ -1693,7 +1694,7 @@ def BASE(src, path = None):
 # http://www.freebsd.org/doc/en_US.ISO8859-1/books/handbook/jails-application.html
    log(0, 'create SROOT and symlinks!')
    os.chdir('%s' % path)
-   os.system('mkdir -p %s/SROOT/home %s/SROOT/usr-X11R6 %s/SROOT/distfiles %s/SROOT/usr-share- %s/SROOT/compat' % (path,  path, path, path, path))
+   os.system('mkdir -p %s/SROOT/home %s/SROOT/usr-X11R6 %s/SROOT/distfiles %s/SROOT/usr-share-keys %s/SROOT/compat' % (path,  path, path, path, path))
    os.system('mv %s/etc SROOT/' % path)
    os.system('mv %s/usr/local SROOT/usr-local' % path)
    os.system('mv %s/usr/share/keys/* SROOT/usr-share-keys/' % path)
@@ -1709,6 +1710,7 @@ def BASE(src, path = None):
    os.system('ln -s /SROOT/usr-X11R6 usr/X11R6')
    os.system('ln -s /SROOT/distfiles usr/ports/distfiles')
    os.system('ln -s SROOT/tmp tmp')
+   os.system('chmod 1777 %s/SROOT/tmp/' % path)
    os.system('ln -s SROOT/var var')
    os.system('ln -s SROOT/compat compat')
 # Create a generic /home/j/skel/etc/make.conf containing this line
