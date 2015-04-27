@@ -1435,10 +1435,11 @@ def create_jail(newjail):
        log(0, "jail was installed from '%s'" % newjail['install'][0])
 
 # 4. do post install
-   if newjail['install'][0] == 'skel':
-      jadm_postinstall('%s/rw' % newjail['path'])
-   else:
-      jadm_postinstall(newjail['path'])
+   if newjail['install'][0] != 'template':
+      if newjail['install'][0] == 'skel':
+          jadm_postinstall('%s/rw' % newjail['path'])
+      else:
+          jadm_postinstall(newjail['path'])
 
 # 5. update jail.conf
    update_jail_conf(['new_jail', [newjail], 'create'])
