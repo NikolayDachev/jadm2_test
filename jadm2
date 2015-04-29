@@ -850,11 +850,11 @@ def log(ltype, msg, logit = None):
    if logit != None:
       logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', level=logging.DEBUG, filename=logfile)
       if ltype == 0:
-         logging.info('   %s' % msg)
+         logging.info(msg)
       if ltype == 1:
          logging.warning(msg)
       if ltype == 2:
-         logging.error('  %s' % msg)
+         logging.error(msg)
 
 def jail_input(modify = None):
    """
