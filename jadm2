@@ -2824,10 +2824,10 @@ class lcmd(cmd.Cmd):
         arg = str(arg).split(' ')
         arg = [i for i in arg if i != '']
 
-        ip = LHOST
-        port = LPORT
+        global LHOST
+        global LPORT
 
-        jserver = net_server(ip, port)
+        jserver = net_server(LHOST, LPORT)
         t = threading.Thread(target=jserver.server)
         t.daemon = True
         t.start()
