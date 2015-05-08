@@ -2355,23 +2355,26 @@ class net_server:
                 try:
 #In Windows, sometimes when a TCP program closes abruptly,
 # a "Connection reset by peer" exception will be thrown
-                    self.data = sock.recv(self.RECV_BUFFER)
-                    self.decData = self.aes(pwd, 'dec', self.data)
+                    recvdata = sock.recv(self.RECV_BUFFER)
+
                     # echo back the client message
-                    if self.data:
+                    if recvdata:
+                        decData = self.aes(pwd, 'dec', recvdata)
+
 # shutdown server if receive 'closecon'
-                        if self.decData == 'closecon':
+                        if decData == 'closecon':
                            log(1, "jadm server was stopped by '%s:%s'!" % (addr[0], addr[1]), 1)
                            s.close()
                            return False
 
                         if isbin == 1:
                            buf = open('%s/migrated_%s' % (self.migpath, self.migname), 'w')
-                           buf.write(self.decData)
+                           buf.write(decData)
                            buf.close()
 
                         else:
-                           data = self.decData.split(' ')
+                           data = decData.split(' ')
+                           print data
 # check and create path for new migrated jail
                            if data[0] == 'jail':
                               self.migname = data[1]
@@ -2380,10 +2383,10 @@ class net_server:
                                  subprocess.call(['mkdir', '-p', '%s' % (data[2])])
                                  log(0, "'%s' was create by '%s:%s'" % (data[2], addr[0], addr[1]), 1)
 
-                        if self.decData == 'isbin':
+                        if decData == 'isbin':
                             isbin = 1
 
-                        if self.decData == 'no_isbin':
+                        if decData == 'no_isbin':
                             isbin = 0
 
                         sock.send(self.data)
@@ -2397,7 +2400,7 @@ class net_server:
 # close socket server
       s.close()
 
-   def client(self):
+   def client(self, bindata = 0, data = 'no_isbin'):
       '''
 ########################################################################################
 #       send aes encrypted data
@@ -2417,11 +2420,9 @@ class net_server:
 # ENC and SEND
 # send jadm cmd
 
-      encData = self.aes(self.secret, 'enc', self.data)
 # send bin file
-      if self.data == "binfile":
-         log(0, "transfer '%s' to '%s:%s'" % (self.binfile, self.host, self.remote_path))
-         send_file = open(self.binfile, "rb")
+      if bindata == 1:
+         send_file = open(data, "rb")
          while True:
             chunk = send_file.read(65536)
             encData = self.aes(self.secret, 'enc', chunk)
@@ -2429,13 +2430,24 @@ class net_server:
                break  # EOF
             self.cs.sendall(encData)
 
-      self.cs.send(encData)
-      rcvData = self.cs.recv(1024)
+         rcvData = self.cs.recv(1024)
 
-      self.cs.shutdown(socket.SHUT_RDWR)
-      self.cs.close()
-      log(0, "transfer to '%s' was finished!" % self.host, 1)
-      return '0'
+         self.cs.shutdown(socket.SHUT_RDWR)
+         self.cs.close()
+         log(0, "transfer to '%s' was finished!" % self.host, 1)
+         return '0'
+
+      else:
+            encData = self.aes(self.secret, 'enc', data)
+            log(0, "transfer '%s' to '%s:%s'" % (data, self.host, self.remote_path))
+
+            self.cs.send(encData)
+            rcvData = self.cs.recv(1024)
+
+            self.cs.shutdown(socket.SHUT_RDWR)
+            self.cs.close()
+            log(0, "transfer to '%s' was finished!" % self.host, 1)
+            return '0'
 
    def migrate_client(self):
       '''
@@ -2482,16 +2494,24 @@ class net_server:
              log(2, "jadm cannot create '%s' file!" % mfile, 1)
              return False
 
-# announce jail migration
-      self.data = 'jail %s %s/%s' %  (jail['name'], self.remote_path, jail['name'])
-      self.client()
-
-      self.data = "isbin"
-      self.client()
-
-      self.data = "binfile"
-      self.binfile = mfile
-      self.client()
+# send clietn start!
+      client_status = 0
+# send jail name and jail path to remote host
+      if client_status == 0:
+         client_status = self.client(0, 'jail %s %s/%s' %  (jail['name'], self.remote_path, jail['name']))
+# send archive file name
+      if client_status == 0:
+         client_status = self.client(0, 'isbin')
+# send bin file name
+      if client_status == 0:
+         client_status = self.client(1, mfile)
+# send client end
+      if client_status == 0:
+         log(0, "'%s' migration complete successful please check '%s' for status!" % (jail['name'], self.host), 1)
+         return True
+      else:
+         log(2, "'%s' migration fail please check '%s' for status!" % (jail['name'], self.host), 1)
+         return False
 
    def aes(self, secret, encdec, data):
       '''
@@ -2552,6 +2572,9 @@ class lcmd(cmd.Cmd):
               'vnet', 'novnet', 'zfs', 'nozfs',
               'skel', 'noskel', 'quota', 'used', 'empty']
    mserver = ['server',  'client']
+
+   def emptyline(self):
+         pass
 
    def do_list(self, arg):
       """ List of jails in table format
@@ -2844,7 +2867,7 @@ class lcmd(cmd.Cmd):
 
    def do_migrate(self, arg):
         """  Migrate jail to remote server
-        - usage: migrate re.mo.te.ip port sever_pwd 'name/jid' /remote/path
+        - usage: migrate re.mo.te.ip(0) port(1) sever_pwd(2) 'name/jid'(3:) /remote/path(3:)
         """
         arg = str(arg).split(' ')
         arg = [i for i in arg if i != '']
