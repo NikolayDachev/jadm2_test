@@ -2316,7 +2316,7 @@ class net_server:
    def server(self):
       '''
 ########################################################################################
-#       recv aes encypted data
+#       recv aes encrypted data
 #
       '''
 #     gen random enc password 'pwd'
@@ -2331,9 +2331,9 @@ class net_server:
          s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
          s.bind((self.host, self.port))
          s.listen(10)
-         log(0, "jadm server was bind to '%s:%s' with pass: %s" % (self.host, self.port, pwd), 1)
+         log(0, "jadm start server '%s:%s' with security key: %s" % (self.host, self.port, pwd), 1)
       except:
-         log(2, "jadm cant bind '%s:%s' address" % (self.host, self.port), 1)
+         log(2, "jadm can't bind '%s:%s' address" % (self.host, self.port), 1)
          return False
 
 # Add server socket to the list of readable connections
@@ -2360,7 +2360,7 @@ class net_server:
                              if not recvdata:
                                  isbin = 0
                                  buf.close()
-                                 log(0, "'%s/%s' was received from '%s'" % (self.migpath, self.migfile, addr[0]))
+                                 log(0, "'%s/%s' was received from '%s:%s'" % (self.migpath, self.migfile, addr[0], addr[1]))
                                  break
                              decData = self.aes(pwd, 'dec', recvdata)
                              buf.write(decData)
@@ -2458,7 +2458,7 @@ class net_server:
 
 ### NETWORK CLIENT ###
       if len(self.secret) != 16:
-         return log(2, "server password should be 16 symbols, current is: %s" % len(self.secret))
+         return log(2, "security key should be 16 symbols, current is: %s" % len(self.secret))
 
       try:
          self.cs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -2491,8 +2491,19 @@ class net_server:
       self.cs.shutdown(socket.SHUT_RDWR)
       self.cs.close()
 # display end msg
-      log(0, "'%s' migration complete please check '%s' for status!" % (jail['name'], self.host), 1)
+      log(0, "'%s' migration was complete please check '%s' for status!" % (jail['name'], self.host), 1)
       return True
+
+   def RestoreJail(self):
+      '''
+########################################################################################
+# check and restore migrated jail
+#
+      '''
+
+      print "RESTORE FROM ... "
+
+
 
    def aes(self, secret, encdec, data):
       '''
@@ -2506,7 +2517,7 @@ class net_server:
 # the character used for padding--with a block cipher such as AES, the value
 # you encrypt must be a multiple of BLOCK_SIZE in length.  This character is
 # used to ensure that your value is always a multiple of BLOCK_SIZE
-      PADDING = '{'
+      PADDING = "*"
 
 # one-liner to sufficiently pad the text to be encrypted
       pad = lambda s: s + (BLOCK_SIZE - len(s) % BLOCK_SIZE) * PADDING
@@ -2521,13 +2532,12 @@ class net_server:
 
       if encdec == 'enc':
  # encode a string
-         encoded = EncodeAES(cipher, data)
-         return encoded
-
+         txt = EncodeAES(cipher, data)
       if encdec == 'dec':
 # decode the encoded string
-         decoded = DecodeAES(cipher, data)
-         return decoded
+         txt = DecodeAES(cipher, data)
+
+      return txt
 
 ########################################################################################
 # MAIN MENU
