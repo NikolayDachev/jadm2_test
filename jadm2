@@ -2389,6 +2389,7 @@ class net_server:
 # migrated jail name
                               self.migname = data[1]
                               if check_jail_Setting('name', data[1]) == False:
+                                  log (2, "'%s' cannot be received from '%s:%s'"  % (data[1], addr[0], addr[1]), 1)
                                   sock.send('jexist')
                                   sock.close()
                                   CONNECTION_LIST.remove(sock)
@@ -2398,7 +2399,7 @@ class net_server:
 # migrated jail path
                               self.migpath = data[2]
                               if check_jail_Setting('path', data[2]) == False:
-                                 recvdata = log(2, "'%s' directory already exist and cannot be created!")
+                                 log (2, "'%s' cannot be received from '%s:%s'"  % (data[1], addr[0], addr[1]), 1)
                                  sock.send('direxist')
                                  sock.close()
                                  CONNECTION_LIST.remove(sock)
@@ -2487,7 +2488,12 @@ class net_server:
       rcvData = self.cs.recv(1024)
 
       if rcvData != sendData:
-          print "error !!: %s" % rcvData
+          if rcvData == 'jexist':
+              log (2, "'%s' cannot be send to '%s:%s' -> already exist!"  % (jail['name'], self.host, self.port), 1)
+          if rcvData == 'direxist':
+              log (2, "'%s:%s:%s' cannot be created -> already exist!!"  % (self.host, self.port, self.remote_path), 1)
+          os.system('rm -rf %s' % mfile)
+          log (1, "'%s' was destroyed!" % mfile)
           self.cs.shutdown(socket.SHUT_RDWR)
           self.cs.close()
           return False
