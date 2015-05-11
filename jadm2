@@ -2372,10 +2372,7 @@ class net_server:
                           if self.fileMD5 != rcvfileMD5:
                               log(2, "'%s/%s' received md5 ( s% ) sum is not same as expected ( %s ) !" % (self.migpath, self.migfile, self.fileMD5, rcvfileMD5))
                           else:
-                              if self.RestoreJail() == True:
-                                 sock.send('completed')
-                              else:
-                                 sock.send('failed')
+                              self.RestoreJail()
                               sock.close()
                               CONNECTION_LIST.remove(sock)
                               continue
@@ -2505,17 +2502,17 @@ class net_server:
 # Create jail archive/zfs
       try:
          if jail['zfs'] == 0:
-             mfile = '%s/../migration_back_%s.tar.gz' % (jail['path'], jail['name'])
-             os.system('tar czPf %s %s' % (mfile, jail['path']))
-             file_an = 'migration_back_%s.tar.gz' % jail['name']
+             mfile = '%s/../migration_backup_%s.tar.gz' % (jail['path'], jail['name'])
+             os.system('tar czPf %s -C %s .' % (mfile, jail['path']))
+             file_an = 'migration_backup_%s.tar.gz' % jail['name']
              jtype = 'tar'
          else:
-             mfile = '%s/../migration_back_%s.zfs' % (jail['path'], jail['name'])
+             mfile = '%s/../migration_backup_%s.zfs' % (jail['path'], jail['name'])
              jsnap = jail_zfs_snap()
              zfssnap = jsnap.create(jail['name'])
              os.system('zfs send %s > %s' % (zfssnap, mfile))
              os.system('zfs destroy -rf %s' % (zfssnap))
-             file_an = 'migration_back_%s.zfs' % jail['name']
+             file_an = 'migration_backup_%s.zfs' % jail['name']
              jtype = 'zfs'
 # check md5 sum
          mfileMD5 = hashlib.md5(open(mfile).read()).hexdigest()
@@ -2540,10 +2537,6 @@ class net_server:
               log(2, "zfs '%s/%s' cannot be created by '%s:%s'!" % (self.zfs, jail['name'], self.host, self.port), 1)
           os.system('rm -rf %s' % mfile)
           log (1, "'%s' was destroyed!" % mfile)
-          if rcvData == 'completed':
-              log(0, "'%s' was migrated successful to '%s:%s'!" % (jail['name'], self.host, self.port), 1)
-          if rcvData == 'failed':
-              log(2, "'%s' was not migrated successful to '%s:%s'!" % (jail['name'], self.host, self.port), 1)
           self.cs.shutdown(socket.SHUT_RDWR)
           self.cs.close()
           return False
@@ -2560,11 +2553,12 @@ class net_server:
          if not chunk:
             break  # EOF
          self.cs.sendall(chunk)
-
 # close all connections
       self.cs.shutdown(socket.SHUT_RDWR)
       self.cs.close()
 # display end msg
+      os.system('rm -rf %s' % mfile)
+      log (1, "'%s' was destroyed!" % mfile)
       log(0, "'%s' migration was complete please check '%s' for status!" % (jail['name'], self.host), 1)
       return True
 
