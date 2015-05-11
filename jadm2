@@ -2389,8 +2389,7 @@ class net_server:
 # migrated jail name
                               self.migname = data[1]
                               if check_jail_Setting('name', data[1]) == False:
-                                  recvdata = log(2, "jail with name '%s' already exist!")
-                                  sock.send(recvdata)
+                                  sock.send('jexist')
                                   sock.close()
                                   CONNECTION_LIST.remove(sock)
                                   continue
@@ -2400,7 +2399,7 @@ class net_server:
                               self.migpath = data[2]
                               if check_jail_Setting('path', data[2]) == False:
                                  recvdata = log(2, "'%s' directory already exist and cannot be created!")
-                                 sock.send(recvdata)
+                                 sock.send('direxist')
                                  sock.close()
                                  CONNECTION_LIST.remove(sock)
                                  continue
@@ -2451,6 +2450,17 @@ class net_server:
 
 # create tar file without encription
       log(0, "jail '%s' will be migrated to '%s:%s/%s'!" % (jail['name'], self.host, self.remote_path, jail['name']), 1)
+
+### NETWORK CLIENT ###
+      try:
+         self.cs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+         self.cs.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+         self.cs.connect((self.host, self.port))
+      except socket.error:
+         log(2, "no connection to %s:%s" % (self.host, self.port))
+         return False
+
+# Create jail archive/zfs
       try:
          if jail['zfs'] == 0:
              mfile = '%s/../migration_back_%s.tar.gz' % (jail['path'], jail['name'])
@@ -2469,22 +2479,18 @@ class net_server:
              log(2, "jadm cannot create '%s' file!" % mfile, 1)
              return False
 
-### NETWORK CLIENT ###
-      try:
-         self.cs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-         self.cs.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-         self.cs.connect((self.host, self.port))
-      except socket.error:
-         log(2, "no connection to %s:%s" % (self.host, self.port))
-         return False
+# MIGRATION
 
 # step 1 - send jail name and path
       sendData = 'jail %s %s/%s %s' %  (jail['name'], self.remote_path, jail['name'], file_an)
       self.cs.send(sendData)
       rcvData = self.cs.recv(1024)
 
-      if sendData != rcvData:
-          print "error !!"
+      if rcvData != sendData:
+          print "error !!: %s" % rcvData
+          self.cs.shutdown(socket.SHUT_RDWR)
+          self.cs.close()
+          return False
 
 # step 2 - announce BIN data
       sendData = 'isbin'
