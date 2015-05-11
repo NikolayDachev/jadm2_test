@@ -31,9 +31,8 @@ OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITU
 # cmd - used for jadm command shell
 # paramiko - used for jail migration via ssh
 # socket - jadm client/server
-# AES - aes encryption
-# base64 aes encription help
 # ftplib - download freebsd bin install files
+# hashlib library (md5 file check)
 
 from datetime import datetime
 from tabulate import tabulate
@@ -46,8 +45,7 @@ import netifaces
 import cmd
 import copy
 # network server
-from Crypto.Cipher import AES
-import base64
+import hashlib
 import string
 import random
 import threading
@@ -2303,7 +2301,13 @@ class net_server:
        self.host = host
        self.port = int(port)
        self.jname = jname
-       self.jpath = jpath
+# check if we call client or server (0 for server)
+       if jpath != 0:
+          pz = jpath.split(':')
+          self.jpath = pz[0]
+          self.zfs = None
+          if len(pz) == 2:
+             self.zfs = pz[1]
 
    def find_jail(self, jnid):
 # check if jail exist
@@ -2347,6 +2351,7 @@ class net_server:
                 sockfd, addr = s.accept()
                 CONNECTION_LIST.append(sockfd)
                 log(0, "jadm server is connected by: '%s:%s'" % (addr[0], addr[1]), 1)
+                self.ip, self.cport = addr[0], addr[1]
 #Some incoming message from a client
             else:
 # Data recieved from client, process it
@@ -2357,12 +2362,23 @@ class net_server:
                              recvdata = sock.recv(self.RECV_BUFFER)
                              if not recvdata:
                                  isbin = 0
+                                 rcvfile = '%s/%s' % (self.rcfdir, self.migfile)
                                  buf.close()
-                                 log(0, "'%s/%s' was received from '%s:%s'" % (self.migpath, self.migfile, addr[0], addr[1]))
+                                 log(0, "'%s/%s' was received from '%s:%s' -> md5( %s )" % (self.rcfdir, self.migfile, addr[0], addr[1], self.fileMD5))
                                  break
                              buf.write(recvdata)
-                          sock.sendall(recvdata)
-                          continue
+# check md5 sum
+                          rcvfileMD5 = hashlib.md5(open(rcvfile).read()).hexdigest()
+                          if self.fileMD5 != rcvfileMD5:
+                              log(2, "'%s/%s' received md5 ( s% ) sum is not same as expected ( %s ) !" % (self.migpath, self.migfile, self.fileMD5, rcvfileMD5))
+                          else:
+                              if self.RestoreJail() == True:
+                                 sock.send('completed')
+                              else:
+                                 sock.send('failed')
+                              sock.close()
+                              CONNECTION_LIST.remove(sock)
+                              continue
 
 #In Windows, sometimes when a TCP program closes abruptly,
 # a "Connection reset by peer" exception will be thrown
@@ -2377,7 +2393,7 @@ class net_server:
                            return False
 
                         if recvdata == 'isbin':
-                            buf = open('%s/%s' % (self.migpath, self.migfile), 'w')
+                            buf = open('%s/%s' % (self.rcfdir, self.migfile), 'w')
                             isbin = 1
 
                         if recvdata == 'no_isbin':
@@ -2397,18 +2413,43 @@ class net_server:
                               else:
                                   log(0, "jail with name '%s' will be received from '%s:%s'" % (data[1], addr[0], addr[1]), 1)
 # migrated jail path
-                              self.migpath = data[2]
-                              if check_jail_Setting('path', data[2]) == False:
-                                 log (2, "'%s' cannot be received from '%s:%s'"  % (data[1], addr[0], addr[1]), 1)
-                                 sock.send('direxist')
-                                 sock.close()
-                                 CONNECTION_LIST.remove(sock)
-                                 continue
+                              self.migpath = '%s/%s' % (data[2], data[1])
+                              if check_jail_Setting('path', self.migpath) == False:
+                                log (2, "'%s' cannot be received from '%s:%s'"  % (data[1], addr[0], addr[1]), 1)
+                                sock.send('direxist')
+                                sock.close()
+                                CONNECTION_LIST.remove(sock)
+                                continue
                               else:
-                                 subprocess.call(['mkdir', '-p', '%s' % (data[2])])
-                                 log(0, "'%s' directory was create by '%s:%s'" % (data[2], addr[0], addr[1]), 1)
+                                 subprocess.call(['mkdir', '-p', '%s' % (self.migpath)])
+                                 log(0, "'%s' directory was create by '%s:%s'" % (self.migpath, addr[0], addr[1]), 1)
 
+                              self.rcfdir = data[2]
                               self.migfile = data[3]
+                              self.fileMD5 = data[4]
+# migrate zfs
+                              self.jtype = data[5]
+                              self.jzfs = data[6]
+                              if self.jtype == 'zfs':
+                                 if zfs('%s/%s' % (self.jzfs, self.migname))[2] == 1:
+                                    log(2, "'%s/%s' already exist and cannot be used!" % (self.jzfs, self.migname), 1)
+                                    sock.send('zfs')
+                                    sock.close()
+                                    CONNECTION_LIST.remove(sock)
+                                    continue
+                                 else:
+                                    try:
+                                       subprocess.check_call('zfs create %s/%s' % (self.jzfs, self.migname), shell=True)
+                                       subprocess.check_call('zfs set mountpoint=%s  %s/%s' % (self.migpath, self.jzfs, self.migname), shell=True)
+                                       log(0, "zfs '%s/%s' was created by '%s:%s'!" % (self.jzfs, self.migname, addr[0], addr[1]), 1)
+                                    except subprocess.CalledProcessError:
+                                       log(2, "zfs '%s/%s' cannot be created!" % (self.jzfs, self.migname), 1)
+                                       os.system('rm -rf %s' % (self.migpath))
+                                       sock.send('zfs')
+                                       sock.close()
+                                       CONNECTION_LIST.remove(sock)
+                                       continue
+
                         sock.send(recvdata)
 # client disconnected, so remove from socket list
                 except:
@@ -2467,6 +2508,7 @@ class net_server:
              mfile = '%s/../migration_back_%s.tar.gz' % (jail['path'], jail['name'])
              os.system('tar czPf %s %s' % (mfile, jail['path']))
              file_an = 'migration_back_%s.tar.gz' % jail['name']
+             jtype = 'tar'
          else:
              mfile = '%s/../migration_back_%s.zfs' % (jail['path'], jail['name'])
              jsnap = jail_zfs_snap()
@@ -2474,8 +2516,10 @@ class net_server:
              os.system('zfs send %s > %s' % (zfssnap, mfile))
              os.system('zfs destroy -rf %s' % (zfssnap))
              file_an = 'migration_back_%s.zfs' % jail['name']
-
-         log(0, "%s was created!" % (mfile))
+             jtype = 'zfs'
+# check md5 sum
+         mfileMD5 = hashlib.md5(open(mfile).read()).hexdigest()
+         log(0, "%s was created! -> md5( %s )" % (mfile, mfileMD5))
       except:
              log(2, "jadm cannot create '%s' file!" % mfile, 1)
              return False
@@ -2483,7 +2527,7 @@ class net_server:
 # MIGRATION
 
 # step 1 - send jail name and path
-      sendData = 'jail %s %s/%s %s' %  (jail['name'], self.remote_path, jail['name'], file_an)
+      sendData = 'jail %s %s %s %s %s %s' %  (jail['name'], self.remote_path, file_an, mfileMD5, jtype, self.zfs)
       self.cs.send(sendData)
       rcvData = self.cs.recv(1024)
 
@@ -2492,8 +2536,14 @@ class net_server:
               log (2, "'%s' cannot be send to '%s:%s' -> already exist!"  % (jail['name'], self.host, self.port), 1)
           if rcvData == 'direxist':
               log (2, "'%s:%s:%s' cannot be created -> already exist!!"  % (self.host, self.port, self.remote_path), 1)
+          if rcvData == 'zfs':
+              log(2, "zfs '%s/%s' cannot be created by '%s:%s'!" % (self.zfs, jail['name'], self.host, self.port), 1)
           os.system('rm -rf %s' % mfile)
           log (1, "'%s' was destroyed!" % mfile)
+          if rcvData == 'completed':
+              log(0, "'%s' was migrated successful to '%s:%s'!" % (jail['name'], self.host, self.port), 1)
+          if rcvData == 'failed':
+              log(2, "'%s' was not migrated successful to '%s:%s'!" % (jail['name'], self.host, self.port), 1)
           self.cs.shutdown(socket.SHUT_RDWR)
           self.cs.close()
           return False
@@ -2521,11 +2571,34 @@ class net_server:
    def RestoreJail(self):
       '''
 ########################################################################################
-# check and restore migrated jail
+# restore migrated jail
 #
       '''
+# try to restore jail form file
+      log(0, "start restoring '%s' to '%s'!" % (self.migfile, self.migpath), 1)
+      log(0, "jail type '%s'" % self.jtype, 1)
+      try:
+         if self.jtype == 'tar':
+            subprocess.call(['tar', '-xzf', '%s/%s' % (self.rcfdir, self.migfile),  '-C', self.migpath])
 
-      print "RESTORE FROM ... "
+         if self.jtype == 'zfs':
+            rcmd = 'zfs receive -F %s/%s < %s/%s' % (self.jzfs, self.migname, self.rcfdir, self.migfile)
+            os.system(rcmd)
+
+         log(0, "restoring '%s' to '%s' was completed!" % (self.migfile, self.migpath), 1)
+         log(1, "please remove '%s/%s' manually!" % (self.rcfdir, self.migfile))
+      except:
+         log(2, "jadm cannot restore '%s' to '%s'!" % (self.migfile, self.migpath), 1)
+         return False
+
+# try to import jail after restring
+      try:
+          import_jail(self.migpath)
+          log(0, "'%s' was migrated successful from '%s:%s'!" % (self.migname, self.ip, self.cport), 1)
+          return True
+      except:
+         log(2, "jadm cannot import '%s' from '%s'!" % (self.migname, self.migpath), 1)
+         return False
 
 ########################################################################################
 # MAIN MENU
@@ -2836,7 +2909,7 @@ class lcmd(cmd.Cmd):
 
    def do_migrate(self, arg):
         """  Migrate jail to remote server
-        - usage: migrate 'name/jid' re.mo.te.ip:port /remote/path
+        - usage: migrate 'name/jid' re.mo.te.ip:port /remote/path(:zfs/path)
         """
         arg = str(arg).split(' ')
         arg = [i for i in arg if i != '']
