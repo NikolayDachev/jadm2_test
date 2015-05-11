@@ -1523,6 +1523,17 @@ def import_jail(jpath):
    i_jail['install'] = ['n/a']
    if os.path.isdir('%s/rw' % jpath) == True:
        i_jail['install'] = ['skel']
+# fix BASE jail fstab file
+       for i in jails:
+          if i['name'] == 'BASE':
+             base = i
+             break
+          if base == None:
+             log(2, "'BASE' jail not exist!")
+             return False
+# create sekl jail fstab file
+       os.system('echo \"%s %s/mnt nullfs ro 0 0\" > %s/rw/etc/fstab' % (base['path'], jpath, jpath))
+       os.system('echo \"%s/rw %s/mnt/SROOT nullfs rw 0 0\" >> %s/rw/etc/fstab' % (jpath, jpath, jpath))
 
    i_jail['path'] = jpath
 
