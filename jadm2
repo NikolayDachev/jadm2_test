@@ -2299,19 +2299,19 @@ class jail_zfs_snap:
 
 class net_server:
 
-   def __init__(self, host = None, port = None, secret = None, cmdname = None):
+   def __init__(self, jname = None, host = None, port = None, jpath = None):
        self.host = host
        self.port = int(port)
-       self.secret = secret
-       if cmdname:
-          self.data = cmdname[0]
-          self.binfile = cmdname[1]
+       self.jname = jname
+       self.jpath = jpath
 
    def find_jail(self, jnid):
 # check if jail exist
       self.jail = check_jail_Setting('modify', jnid)
       if self.jail == False:
          return False
+      else:
+         return self.jail
 
    def server(self):
       '''
@@ -2319,8 +2319,6 @@ class net_server:
 #       recv aes encrypted data
 #
       '''
-#     gen random enc password 'pwd'
-      pwd = ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase + string.digits) for _ in range(16))
 
       CONNECTION_LIST = []    # list of socket clients
       self.RECV_BUFFER = 4096 # Advisable to keep it as an exponent of 2
@@ -2331,7 +2329,7 @@ class net_server:
          s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
          s.bind((self.host, self.port))
          s.listen(10)
-         log(0, "jadm start server '%s:%s' with security key: %s" % (self.host, self.port, pwd), 1)
+         log(0, "jadm start server '%s:%s'" % (self.host, self.port), 1)
       except:
          log(2, "jadm can't bind '%s:%s' address" % (self.host, self.port), 1)
          return False
@@ -2362,8 +2360,7 @@ class net_server:
                                  buf.close()
                                  log(0, "'%s/%s' was received from '%s:%s'" % (self.migpath, self.migfile, addr[0], addr[1]))
                                  break
-                             decData = self.aes(pwd, 'dec', recvdata)
-                             buf.write(decData)
+                             buf.write(recvdata)
                           sock.sendall(recvdata)
                           continue
 
@@ -2373,35 +2370,49 @@ class net_server:
 
                     # echo back the client message
                     if recvdata:
-                        decData = self.aes(pwd, 'dec', recvdata)
-
 # shutdown server if receive 'closecon'
-                        if decData == 'closecon':
+                        if recvdata == 'closecon':
                            log(1, "jadm server was stopped by '%s:%s'!" % (addr[0], addr[1]), 1)
                            s.close()
                            return False
 
-                        if decData == 'isbin':
+                        if recvdata == 'isbin':
                             buf = open('%s/%s' % (self.migpath, self.migfile), 'w')
                             isbin = 1
 
-                        if decData == 'no_isbin':
+                        if recvdata == 'no_isbin':
                             isbin = 0
 
-                        data = decData.split(' ')
+                        data = recvdata.split(' ')
 # check and create path for new migrated jail
                         if data[0] == 'jail':
+# migrated jail name
                               self.migname = data[1]
+                              if check_jail_Setting('name', data[1]) == False:
+                                  recvdata = log(2, "jail with name '%s' already exist!")
+                                  sock.send(recvdata)
+                                  sock.close()
+                                  CONNECTION_LIST.remove(sock)
+                                  continue
+                              else:
+                                  log(0, "jail with name '%s' will be received from '%s:%s'" % (data[1], addr[0], addr[1]), 1)
+# migrated jail path
                               self.migpath = data[2]
-                              self.migfile = data[3]
-                              if check_jail_Setting('path', data[2]) != False:
+                              if check_jail_Setting('path', data[2]) == False:
+                                 recvdata = log(2, "'%s' directory already exist and cannot be created!")
+                                 sock.send(recvdata)
+                                 sock.close()
+                                 CONNECTION_LIST.remove(sock)
+                                 continue
+                              else:
                                  subprocess.call(['mkdir', '-p', '%s' % (data[2])])
-                                 log(0, "'%s' was create by '%s:%s'" % (data[2], addr[0], addr[1]), 1)
+                                 log(0, "'%s' directory was create by '%s:%s'" % (data[2], addr[0], addr[1]), 1)
 
+                              self.migfile = data[3]
                         sock.send(recvdata)
 # client disconnected, so remove from socket list
                 except:
-                    log(2, "'%s:%s' client is offline!" % (addr[0], addr[1]), 1)
+                    log(2, "'%s:%s' jadm client is offline!" % (addr[0], addr[1]), 1)
                     sock.close()
                     CONNECTION_LIST.remove(sock)
                     continue
@@ -2416,15 +2427,17 @@ class net_server:
 #
       '''
       jails = load_jail_config(jailconf)[0]
-      if self.find_jail(self.data) == False:
+# find jail name
+      jail = self.find_jail(self.jname)
+      if jail == False:
           return False
-      self.remote_path = self.binfile
+
+      self.remote_path = self.jpath
 
       if '/' not in self.remote_path:
           log(2, "'%s' is a not valid os path for '%s'!" % (self.remote_path, self.host), 1)
           return False
 
-      jail = self.jail
 # find jail
       for i in jails:
        if i['name'] == jail:
@@ -2457,9 +2470,6 @@ class net_server:
              return False
 
 ### NETWORK CLIENT ###
-      if len(self.secret) != 16:
-         return log(2, "security key should be 16 symbols, current is: %s" % len(self.secret))
-
       try:
          self.cs = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
          self.cs.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -2469,23 +2479,25 @@ class net_server:
          return False
 
 # step 1 - send jail name and path
-      encData = self.aes(self.secret, 'enc', 'jail %s %s/%s %s' %  (jail['name'], self.remote_path, jail['name'], file_an))
-      self.cs.send(encData)
+      sendData = 'jail %s %s/%s %s' %  (jail['name'], self.remote_path, jail['name'], file_an)
+      self.cs.send(sendData)
       rcvData = self.cs.recv(1024)
 
+      if sendData != rcvData:
+          print "error !!"
+
 # step 2 - announce BIN data
-      encData = self.aes(self.secret, 'enc','isbin')
-      self.cs.send(encData)
+      sendData = 'isbin'
+      self.cs.send(sendData)
       rcvData = self.cs.recv(1024)
 
 # step 3 - send zfs/tar file
       send_file = open(mfile, "rb")
       while True:
          chunk = send_file.read(65536)
-         encData = self.aes(self.secret, 'enc', chunk)
          if not chunk:
             break  # EOF
-         self.cs.sendall(encData)
+         self.cs.sendall(chunk)
 
 # close all connections
       self.cs.shutdown(socket.SHUT_RDWR)
@@ -2502,42 +2514,6 @@ class net_server:
       '''
 
       print "RESTORE FROM ... "
-
-
-
-   def aes(self, secret, encdec, data):
-      '''
-########################################################################################
-#   Original src: http://www.codekoala.com/posts/aes-encryption-python-using-pycrypto/
-#
-      '''
-# the block size for the cipher object; must be 16, 24, or 32 for AES
-      BLOCK_SIZE = 32
-
-# the character used for padding--with a block cipher such as AES, the value
-# you encrypt must be a multiple of BLOCK_SIZE in length.  This character is
-# used to ensure that your value is always a multiple of BLOCK_SIZE
-      PADDING = "*"
-
-# one-liner to sufficiently pad the text to be encrypted
-      pad = lambda s: s + (BLOCK_SIZE - len(s) % BLOCK_SIZE) * PADDING
-
-# one-liners to encrypt/encode and decrypt/decode a string
-# encrypt with AES, encode with base64
-      EncodeAES = lambda c, s: base64.b64encode(c.encrypt(pad(s)))
-      DecodeAES = lambda c, e: c.decrypt(base64.b64decode(e)).rstrip(PADDING)
-
-# create a cipher object using the random secret
-      cipher = AES.new(secret)
-
-      if encdec == 'enc':
- # encode a string
-         txt = EncodeAES(cipher, data)
-      if encdec == 'dec':
-# decode the encoded string
-         txt = DecodeAES(cipher, data)
-
-      return txt
 
 ########################################################################################
 # MAIN MENU
@@ -2841,19 +2817,30 @@ class lcmd(cmd.Cmd):
         global LHOST
         global LPORT
 
-        jserver = net_server(LHOST, LPORT)
+        jserver = net_server(0, LHOST, LPORT, 0)
         t = threading.Thread(target=jserver.server)
         t.daemon = True
         t.start()
 
    def do_migrate(self, arg):
         """  Migrate jail to remote server
-        - usage: migrate re.mo.te.ip(0) port(1) sever_pwd(2) 'name/jid'(3:) /remote/path(3:)
+        - usage: migrate 'name/jid' re.mo.te.ip:port /remote/path
         """
         arg = str(arg).split(' ')
         arg = [i for i in arg if i != '']
 
-        jclient = net_server(arg[0], arg[1], arg[2], arg[3:])
+        global LHOST
+        global LPORT
+
+        server = str(arg[1]).split(':')
+        rip = server[0]
+        if len(server) == 2:
+            if server[1] != LPORT:
+                rport = server[1]
+        else:
+            rport = LPORT
+
+        jclient = net_server(arg[0], rip, rport, arg[-1])
         jclient.migrate_client()
 
 ########################################################################################
