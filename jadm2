@@ -148,7 +148,10 @@ def load_jail_config(conf_f):
 # check if jail.conf exist
    if os.path.isfile(conf_f) != True:
       log(2, "'%s' not exist!" % conf_f)
-      sys.exit(2)
+      log(1, "'%s' was created!" % conf_f)
+      os.system("echo '# This file is managed by JADM %s, please do not change it manually!' > %s" % (jadm_version, conf_f))
+      os.system("echo '#' >> %s" % (conf_f))
+      #sys.exit(2)
 # open jail.conf
    jc = open(conf_f, 'r')
 
@@ -276,20 +279,30 @@ def load_jail_config(conf_f):
 
 # try to find jail path if we use global path with $name (jail name)
       if jail_dict['path'] == '':
-         for x in global_settings:
-               if 'path' in x[1]:
-                  if '$name' in x[1]:
-                     y = x[1].split('=')
-                     fixpath = y[1][1:-6]
-                     jail_dict['path'] = '%s%s' % (fixpath, jail_dict['name'])
-                     zfs_check = zfs(jail_dict['path'])
-                     jail_dict['zfs'] = zfs_check[2]
+         jail_dict['path'] = find_global_path(global_settings, jail_dict['name'])
+
+# check if this is zfs
+      zfs_check = zfs(jail_dict['path'])
+      jail_dict['zfs'] = zfs_check[2]
 
 # end add this jail and go with the next one
       jails.append(jail_dict)
 
 # return a list with all jails from jail.conf and list with all global settings
    return (jails, global_settings)
+
+def find_global_path(gs, jname):
+   """
+########################################################################################
+# try to find jail path from global path='' setting
+   """
+   for x in gs:
+      if 'path' in x[1]:
+         gpath = x[1]
+         for i in ('$name', '${name}'):
+            if i in gpath:
+               gpath = gpath.strip('path').strip('=').strip('"').strip("'").replace(i, jname)
+               return gpath
 
 def zfs(zvalue = None):
    """
@@ -1524,13 +1537,14 @@ def import_jail(jpath):
    if os.path.isdir('%s/rw' % jpath) == True:
        i_jail['install'] = ['skel']
 # fix BASE jail fstab file
+       base = None
        for i in jails:
           if i['name'] == 'BASE':
              base = i
              break
-          if base == None:
-             log(2, "'BASE' jail not exist!")
-             return False
+       if base == None:
+          log(2, "'BASE' jail not exist!")
+          return False
 # create sekl jail fstab file
        os.system('echo \"%s %s/mnt nullfs ro 0 0\" > %s/rw/etc/fstab' % (base['path'], jpath, jpath))
        os.system('echo \"%s/rw %s/mnt/SROOT nullfs rw 0 0\" >> %s/rw/etc/fstab' % (jpath, jpath, jpath))
@@ -1739,6 +1753,12 @@ def cli():
 #  jadm command line interface
 #
    """
+
+# -update jail.conf in jadm format
+   if '-update' in sys.argv:
+       fix_jailconf(jailconf)
+       sys.exit(0)
+
 # cli verbose mode for start/stop jail
    if '-v' in sys.argv:
       global verbose
@@ -2187,6 +2207,80 @@ def jail_shell(jnid = None):
        return False
 
    log(0, "Exit from '%s' jail!" % j['name'])
+
+def fix_jailconf(conf_f):
+   """
+########################################################################################
+#  try to pars jail.conf to format readable from jadm
+#
+   """
+
+   format = "%H_%M_%S"
+   dt = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+
+# create backup
+   bckjailconf = '%s.backup.%s' % (conf_f, dt)
+   subprocess.call(['cp', conf_f, bckjailconf])
+   log(0, "'%s' backup was created!" % bckjailconf, 1)
+
+# open jail.conf
+   jc = open(conf_f, 'r')
+# get all elements
+   mas = []
+   for i in jc:
+      i = i.strip('\n')
+      i = i.strip('\t')
+      mas.append(i)
+   jc.close()
+# fix { } + \n
+   for x,y in enumerate(mas):
+# jail begin
+       if "{" in y and "$" not in y:
+           if y != "{":
+               y = y.split(' ')
+               y = cleanlist(y)
+               for a,b in enumerate(y):
+                  if b == '{':
+                     jname =  "%s" % (''.join(y[:a]))
+                     jstart =  '{'
+                     jother =  "%s" % (''.join(y[a+1:]))
+               mas[x] = jname
+               mas.insert(x+1, jstart)
+               mas.insert(x+2, jother)
+# jail end
+       if "}" in y and "$" not in y:
+           if y != "}":
+               y = y.strip('\n')
+               y = y.strip('\t')
+               y = y.split(' ')
+               y = cleanlist(y)
+               for a,b in enumerate(y):
+                  if b == '}':
+                     before =  "%s" % (''.join(y[:a]))
+                     jend =  '}'
+                     jother =  "%s" % (''.join(y[a+1:]))
+               mas[x] = before
+               mas.insert(x+1, jend)
+               mas.insert(x+2, jother)
+
+# write jail.conf
+   jcl = cleanlist(mas)
+   jcl = [x for x in jcl if x not in [' ', '', '    ']]
+   jc = open(conf_f, 'w')
+   jc.write('# This file is managed by JADM %s, please do not change it manually!' % jadm_version)
+   jc.write('#')
+   for i in jcl:
+       jc.write("%s\n" % i)
+       if i == '}':
+          jc.write("")
+   jc.close()
+
+# UDAPTE jail.conf to JADM format and data
+   jails = load_jail_config(jailconf)[0]
+
+   for i in jails:
+       print i
+
 
 class jail_zfs_snap:
    """
