@@ -1089,11 +1089,12 @@ def jail_input(modify = None):
                  ekey = find_global_path(gsettings, new_jail['name'])
                  log(0, "global path found - '%s' will be used!" % ekey)
 
-              if ekey == '':
+              elif ekey == '':
                  log(2, " not valid path!")
                  continue
+              else:
 # jail path = /root path/jail name
-              ekey = '%s/%s' % (ekey, new_jail['name'])
+                 ekey = '%s/%s' % (ekey, new_jail['name'])
 
               if check_jail_Setting(ikey, ekey) == False:
                  continue
