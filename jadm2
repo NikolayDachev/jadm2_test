@@ -1047,12 +1047,8 @@ def jail_input(modify = None):
                        return False
 # try to use global setting path as zfs:
                     if ezfs == '':
-                       for x in gsettings:
-                          if 'path' in x[1]:
-                             if '$name' in x[1]:
-                                y = x[1].split('=')
-                                ezfs = y[1][2:-7]
-                                log(0, "global path found - '%s' will be used!" % ezfs)
+                       ezfs = find_global_path(gsettings, new_jail['name'])
+                       log(0, "global path found - '%s' will be used!" % ezfs)
 
                     ezfs_check = check_jail_Setting(ikey, [ezfs, new_jail['name']])
                     if ezfs_check == False:
@@ -1090,12 +1086,9 @@ def jail_input(modify = None):
            if ikey == 'path':
 # try to use global setting path as zfs:
               if ekey == '':
-                       for x in gsettings:
-                          if 'path' in x[1]:
-                             if '$name' in x[1]:
-                                y = x[1].split('=')
-                                ekey = '%s%s' % (y[1][1:-6], new_jail['name'])
-                                log(0, "global path found - '%s' will be used!" % ekey)
+                 ekey = find_global_path(gsettings, new_jail['name'])
+                 log(0, "global path found - '%s' will be used!" % ekey)
+
               if ekey == '':
                  log(2, " not valid path!")
                  continue
