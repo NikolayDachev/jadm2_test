@@ -295,6 +295,7 @@ def find_global_path(gs, jname):
    """
 ########################################################################################
 # try to find jail path from global path='' setting
+#
    """
    for x in gs:
       if 'path' in x[1]:
@@ -2221,13 +2222,18 @@ def fix_jailconf(conf_f):
    jc = open(conf_f, 'r')
 # get all elements
    mas = []
+   jails = []
    for i in jc:
       i = i.strip('\n')
       i = i.strip('\t')
       mas.append(i)
    jc.close()
+
+   enmas = enumerate(mas)
+   foundjails = []
+   fj = []
 # fix { } + \n
-   for x,y in enumerate(mas):
+   for x,y in enmas:
 # jail begin
        if "{" in y and "$" not in y:
            if y != "{":
@@ -2236,11 +2242,16 @@ def fix_jailconf(conf_f):
                for a,b in enumerate(y):
                   if b == '{':
                      jname =  "%s" % (''.join(y[:a]))
+                     jails.append(jname)
                      jstart =  '{'
                      jother =  "%s" % (''.join(y[a+1:]))
                mas[x] = jname
                mas.insert(x+1, jstart)
                mas.insert(x+2, jother)
+# add jail name/begin to temp list
+               fj.append(jname)
+               fj.append(x)
+
 # jail end
        if "}" in y and "$" not in y:
            if y != "}":
@@ -2256,25 +2267,76 @@ def fix_jailconf(conf_f):
                mas[x] = before
                mas.insert(x+1, jend)
                mas.insert(x+2, jother)
+# add jail to temp list
+           fj.append(x)
+           foundjails.append(fj)
+           fj = []
+
+# append golabl vars to jail.conf
+   fixed_jail_conf = mas[:foundjails[0][1]]
+
+   jid = 1
+# try to fix jail settings
+   for i in foundjails:
+      index = 0
+      isvnet = 0
+      jail = mas[i[1]:i[2]]
+      for y in jail:
+         if "ip4.addr" in y:
+            y = y.strip('\n')
+            y = y.strip('\t')
+            y = y.strip(';')
+            y = y.split('=')
+            y = cleanlist(y)
+            for chip in y:
+              if ch_ipv4(chip) != False:
+                 jail[index] = "$jip = %s" % chip
+
+# mark is as vnet jail.
+         if "vnet" in y:
+             isvnet = 1
+             del jail[index]
+         if "vnet.interface" in y:
+             isvnet = 1
+             del jail[index]
+
+# remove jid we will use new one
+         if "jid" in y:
+            del jail[index]
+# update index
+         index += 1
+
+# add jid
+      jail.append('jid = %s;' % jid)
+      jid += 1
+
+# append jail network configuration
+      if isvnet == 1:
+          jail.append('$jgw = "vnet gateway";')
+          jail.append('$bridge = "vnet bridge";')
+          for n in vnet:
+             jail.append(n)
+      else:
+          jail.append('$jgw = "system";')
+          for n in net:
+              jail.append(n)
+      jail.append('}')
+
+# append jail confi to jail.conf
+      for a in jail:
+          fixed_jail_conf.append(a)
 
 # write jail.conf
-   jcl = cleanlist(mas)
+   jcl = cleanlist(fixed_jail_conf)
    jcl = [x for x in jcl if x not in [' ', '', '    ']]
    jc = open(conf_f, 'w')
-   jc.write('# This file is managed by JADM %s, please do not change it manually!' % jadm_version)
-   jc.write('#')
+   jc.write('# This file is managed by JADM %s\n' % jadm_version)
+   jc.write('#\n')
    for i in jcl:
        jc.write("%s\n" % i)
        if i == '}':
-          jc.write("")
+          jc.write("\n")
    jc.close()
-
-# UDAPTE jail.conf to JADM format and data
-   jails = load_jail_config(jailconf)[0]
-
-   for i in jails:
-       print i
-
 
 class jail_zfs_snap:
    """
