@@ -2313,25 +2313,39 @@ def fix_jailconf(conf_f):
       isvnet = 0
       jail = mas[i[1]:i[2]]
 
+# 0. Fix BASE ID
+      if mas[i[1]] == 'BASE':
+          old_jid = jid
+          jid = 0
+
 # 1. add jail name, #dt and jid
       new_jail = [' ', mas[i[1]],
                  '{',
                  '# %s ' % dt,
                  'jid = %s;' % jid]
+
+# 1.1. Fix BASE ID
+      if mas[i[1]] == 'BASE':
+          jid = old_jid
 # update jid
       jid += 1
+
 # search jail
       for y in jail:
 # 2. add jip
-         if "ip4.addr" in y:
-            y = y.strip('\n')
-            y = y.strip('\t')
-            y = y.strip(';')
-            y = y.split('=')
-            y = cleanlist(y)
-            for chip in y:
-              if ch_ipv4(chip) != False:
-                 new_jail.append("$jip = %s;" % chip)
+         if isjadm1 == 0:
+            if "ip4.addr" in y:
+               y = y.strip('\n')
+               y = y.strip('\t')
+               y = y.strip(';')
+               y = y.split('=')
+               y = cleanlist(y)
+               for chip in y:
+                  if ch_ipv4(chip) != False:
+                     new_jail.append("$jip = %s;" % chip)
+         else:
+            if "$jip =" in y:
+               new_jail.append("$jip = %s;" % y.strip("$jip").replace('"', '').replace(';', '').replace('=', '').replace(' ', ''))
 # 3. find hostname
          if 'host.hostname' in y:
              new_jail.append('host.hostname = "%s";' % y.strip('host.hostname').replace('"', '').replace(';', '').replace('=', '').replace(' ', ''))
@@ -2342,7 +2356,7 @@ def fix_jailconf(conf_f):
          if "path" in y:
               new_jail.append('path = "%s";' % y.strip('path').replace('"', '').replace(';', '').replace('=', '').replace(' ', ''))
 # 6. search for $jgw
-         if "$jgw" in y:
+         if "$jgw = " in y:
             jgateway = y.strip("$jgw").replace('"', '').replace(';', '').replace('=', '').replace(' ', '')
 
 # update vnet count index
