@@ -2237,6 +2237,7 @@ def fix_jailconf(conf_f):
    jadm1 = ['$jzfs',  '$jedir', '$bridge', '$epair']
    test_jc = []
    isjadm1 = 0
+   fixBASE = 0
    for x in mas:
        for y in jadm1:
            if y in x:
@@ -2304,6 +2305,29 @@ def fix_jailconf(conf_f):
 # append golabl vars to jail.conf
    if isjadm1 == 0:
       fixed_jail_conf = mas[:foundjails[0][1]]
+   else:
+# check for BASE-jails before we continue
+       basejails = []
+       for i in foundjails:
+           if isjadm1 == 1:
+              if 'BASE-' in i[0]:
+                 basejails.append(i[0])
+           if basejails:
+              log(1, "jadm find %s BASE- jails created by JADM ver 1.x '!" % len(basejails))
+              print tabulate(basejails, ['BASE jails'])
+              if autoc != 'y':
+                  log(1, "jadm can try to convert BASE-jails ZFS structure to new skeleton model format")
+                  log(1, "jadm will move jail ZFS mount point - 'wr' data from %sBASE-RW/jailname/ to %s/jailname/rw/" % (path1, path1))
+                  log(1, "also jadm will fix and BASE-jails fstab file.")
+                  yn = raw_input("please confirm for all jails (yes):> ")
+                  if yn == 'yes':
+                      log(1, "jadm will fix BASE-jails ZFS structure to new skeleton model format automatically !", 1)
+                      fixBASE = 1
+                  else:
+                      log(1, "jadm will NOT fix BASE-jails ZFS structure please do this manually!", 1)
+              else:
+                  log(1, "jadm will fix BASE-jails ZFS structure to new skeleton model format automatically !", 1)
+                  fixBASE = 1
 
    vnetjails = []
    jid = 1
@@ -2314,18 +2338,18 @@ def fix_jailconf(conf_f):
       jail = mas[i[1]:i[2]]
 
 # 0. Fix BASE ID
-      if mas[i[1]] == 'BASE':
+      if i[0] == 'BASE':
           old_jid = jid
           jid = 0
 
 # 1. add jail name, #dt and jid
-      new_jail = [' ', mas[i[1]],
+      new_jail = [' ', i[0],
                  '{',
                  '# %s ' % dt,
                  'jid = %s;' % jid]
 
 # 1.1. Fix BASE ID
-      if mas[i[1]] == 'BASE':
+      if i[0] == 'BASE':
           jid = old_jid
 # update jid
       jid += 1
@@ -2368,7 +2392,7 @@ def fix_jailconf(conf_f):
 
 # append jail network configuration
       if isvnet == 1:
-          vnetjails.append([mas[i[1]]])
+          vnetjails.append([i[0]])
           new_jail.append('$jgw = "%s";' % jgateway)
           new_jail.append('$bridge = "%s";' % bridge1)
           for n in vnet:
@@ -2377,6 +2401,14 @@ def fix_jailconf(conf_f):
           jail.append('$jgw = "system";')
           for n in net:
               new_jail.append(n)
+
+# check if this is BASE-jail form jadm v 1.0
+      if isjadm1 == 1:
+         if "BASE-" in i[0]:
+            new_jail.extend(['### BASE mount settings ###', 'mount.fstab = %s%s/rw/etc/fstab;' % (path1, i[0]), 'mount.devfs;'])
+# cehck if we jadm will fix ZFS for BASE-jail + fstab
+            if fixBASE == 1:
+                print "ZFS was fixed!"
 
       new_jail.extend(['}', ' '])
 
