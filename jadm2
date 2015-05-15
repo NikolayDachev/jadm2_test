@@ -2338,6 +2338,7 @@ def fix_jailconf(conf_f):
       index = 0
       isvnet = 0
       jail = mas[i[1]:i[2]]
+      new_jail_locals = []
 
 # 0. Fix BASE
       if i[0] == 'BASE':
@@ -2379,7 +2380,23 @@ def fix_jailconf(conf_f):
       jid += 1
 
 # search jail
+      lscheck = 0
       for y in jail:
+
+# append local settings
+         if lscheck == 1:
+             if '}' not in y:
+                new_jail_locals.append(y)
+                continue
+             else:
+                lscheck = 0
+                continue
+
+# try to find local settings
+         if y == '### local settings ###':
+            lsheck = 1
+            continue
+
 # 2. add jip
          if isjadm1 == 0:
             if "ip4.addr" in y:
@@ -2397,15 +2414,25 @@ def fix_jailconf(conf_f):
 # 3. find hostname
          if 'host.hostname' in y:
              new_jail.append('host.hostname = "%s";' % y.strip('host.hostname').replace('"', '').replace(';', '').replace('=', '').replace(' ', ''))
+             continue
 # 4. mark is as vnet jail.
          if "vnet" in y:
              isvnet = 1
+             continue
 # 5. path
          if "path" in y:
               new_jail.append('path = "%s";' % y.strip('path').replace('"', '').replace(';', '').replace('=', '').replace(' ', ''))
+              continue
 # 6. search for $jgw
          if "$jgw = " in y:
             jgateway = y.strip("$jgw").replace('"', '').replace(';', '').replace('=', '').replace(' ', '')
+            continue
+
+#7. add all other jail settings under local
+         if isjadm1 == 0:
+            if y not in ['{', '}', 'jid'] and y != i[0]:
+               new_jail_locals.append(y)
+               continue
 
 # update vnet count index
          index += 1
@@ -2437,9 +2464,10 @@ def fix_jailconf(conf_f):
             if fixBASE == 1:
                 new_jail_zfs  = zfs('%sBASE-RW/%s' % (path1, i[0]))
                 try:
-                   os.system('mkdir -p %s%s/mnt' % (path1, i[0]))
+                   os.system('zfs set mountpoint=%s%s %s' % (path1, i[0], new_jail_zfs[-1][0]))
                    os.system('mkdir -p %s%s/rw' % (path1, i[0]))
-                   os.system('zfs set mountpoint=%s%s/rw %s' % (path1, i[0], new_jail_zfs[-1][0]))
+                   os.system('mv -f %s%s/* %s%s/rw/' * (path1, i[0], path1, i[0]))
+                   os.system('mkdir -p %s%s/mnt' % (path1, i[0]))
                    log(0, "%s: new zfs mount point '%s%s' : '%s' " % (i[0], path1, i[0], new_jail_zfs[-1][0]), 1)
                 except:
                    log(2, "%s: not abel to set new zfs mount point, please do this manually!" % (i[0]), 1)
@@ -2452,6 +2480,9 @@ def fix_jailconf(conf_f):
                    log(2, "%s: '%s%s/rw/etc/fstab' was not updated!" % (i[0], path1, i[0]), 1)
 
       new_jail.extend(['#@# local settings #@#'])
+      if new_jail_locals:
+          for i in new_jail_locals:
+              new_jail.append(i)
       new_jail.extend(['}', ' '])
 
 # append jail confi to jail.conf
