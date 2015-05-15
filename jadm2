@@ -1749,10 +1749,11 @@ def cli():
 #
    """
 
-# -update jail.conf in jadm format
-   if '-update' in sys.argv:
-       fix_jailconf(jailconf)
-       sys.exit(0)
+# cli auto confirm
+   if '-y' in sys.argv:
+      global autoc
+      autoc = 'y'
+      log(1, "auto confirm mode enable!")
 
 # cli verbose mode for start/stop jail
    if '-v' in sys.argv:
@@ -1760,11 +1761,10 @@ def cli():
       verbose = 1
       log(0, "run/stop jail verbose mode enable!")
 
-# cli auto confirm
-   if '-y' in sys.argv:
-      global autoc
-      autoc = 'y'
-      log(1, "auto confirm mode enable!")
+# -update jail.conf in jadm format
+   if '-update' in sys.argv:
+       fix_jailconf(jailconf)
+       sys.exit(0)
 
 # remove ['-v', '-y'] from cmd list
    sys.argv = [x for x in sys.argv if x not in ['-v', '-y']]
@@ -2311,23 +2311,25 @@ def fix_jailconf(conf_f):
        for i in foundjails:
            if isjadm1 == 1:
               if 'BASE-' in i[0]:
-                 basejails.append(i[0])
-           if basejails:
-              log(1, "jadm find %s BASE- jails created by JADM ver 1.x '!" % len(basejails))
-              print tabulate(basejails, ['BASE jails'])
-              if autoc != 'y':
-                  log(1, "jadm can try to convert BASE-jails ZFS structure to new skeleton model format")
-                  log(1, "jadm will move jail ZFS mount point - 'wr' data from %sBASE-RW/jailname/ to %s/jailname/rw/" % (path1, path1))
-                  log(1, "also jadm will fix and BASE-jails fstab file.")
-                  yn = raw_input("please confirm for all jails (yes):> ")
-                  if yn == 'yes':
-                      log(1, "jadm will fix BASE-jails ZFS structure to new skeleton model format automatically !", 1)
-                      fixBASE = 1
-                  else:
-                      log(1, "jadm will NOT fix BASE-jails ZFS structure please do this manually!", 1)
-              else:
-                  log(1, "jadm will fix BASE-jails ZFS structure to new skeleton model format automatically !", 1)
-                  fixBASE = 1
+                 basejails.append([i[0]])
+
+# confirm if we will fix BASE- ZFS auto.
+   if basejails:
+      log(1, "jadm find %s BASE- jails created by JADM ver 1.x '!" % len(basejails))
+      print tabulate(basejails, ['jadm ver.1.x BASE- jails'])
+      if autoc != 'y':
+         log(1, "jadm can try to convert BASE-jails ZFS structure to new skeleton model")
+         log(1, "jadm will move jail ZFS mount point - 'wr' data from %sBASE-RW/jailname/ to %s/jailname/rw/" % (path1, path1))
+         log(1, "also jadm will fix and BASE-jails fstab file.")
+         yn = raw_input("please confirm for all jails (yes):> ")
+         if yn == 'yes':
+            log(1, "jadm will fix BASE-jails ZFS structure to new skeleton model automatically !", 1)
+            fixBASE = 1
+         else:
+            log(1, "jadm will NOT fix BASE-jails ZFS structure please do this manually!", 1)
+      else:
+         log(1, "jadm will fix BASE-jails ZFS structure to new skeleton model automatically !", 1)
+         fixBASE = 1
 
    vnetjails = []
    jid = 1
@@ -2337,20 +2339,42 @@ def fix_jailconf(conf_f):
       isvnet = 0
       jail = mas[i[1]:i[2]]
 
-# 0. Fix BASE ID
+# 0. Fix BASE
       if i[0] == 'BASE':
-          old_jid = jid
-          jid = 0
+          log(0, "'BASE' jail found!", 1)
+          new_jail = [' ',
+                      'BASE',
+                      '{',
+                      '# %s ' % dt,
+                      'jid = 0;',
+                      '$jip = "n/a";',
+                      '$jgw = "n/a";',
+                      'host.hostname = "n/a";',
+                      'path = "%sBASE";' % path1,
+                      '### network settings ###',
+                      'ip4.addr = "$jip";',
+                      'exec.start = "/bin/sh /etc/rc";',
+                      'exec.stop = "/bin/sh /etc/rc.shutdown";',
+                      'persist;',
+                      '#@# local settings #@#',
+                      '}']
+# fix SROOT
+          try:
+              subprocess.call(['cp', '-f', '-R', '%sBASE-SKELETON/' % path1, '%sBASE/SROOT/' % path1])
+              log(0, "'BASE/SROOT' was fixed!", 1)
+          except:
+              log(2, "'BASE/SROOT' was not fixed please check it manually!", 1)
+
+# append BASE jail config to jail.conf
+          for a in new_jail:
+             fixed_jail_conf.append(a)
+          continue
 
 # 1. add jail name, #dt and jid
       new_jail = [' ', i[0],
                  '{',
                  '# %s ' % dt,
                  'jid = %s;' % jid]
-
-# 1.1. Fix BASE ID
-      if i[0] == 'BASE':
-          jid = old_jid
 # update jid
       jid += 1
 
@@ -2388,7 +2412,10 @@ def fix_jailconf(conf_f):
 
 # add path if is jadm ver 1
       if isjadm1 == 1:
-         new_jail.append('path = "%s%s";' % (path1, mas[i[1]]))
+         if 'BASE-' in i[0]:
+            new_jail.append('path = "%s%s/mnt";' % (path1, mas[i[1]]))
+         else:
+            new_jail.append('path = "%s%s";' % (path1, mas[i[1]]))
 
 # append jail network configuration
       if isvnet == 1:
@@ -2408,8 +2435,23 @@ def fix_jailconf(conf_f):
             new_jail.extend(['### BASE mount settings ###', 'mount.fstab = %s%s/rw/etc/fstab;' % (path1, i[0]), 'mount.devfs;'])
 # cehck if we jadm will fix ZFS for BASE-jail + fstab
             if fixBASE == 1:
-                print "ZFS was fixed!"
+                new_jail_zfs  = zfs('%sBASE-RW/%s' % (path1, i[0]))
+                try:
+                   os.system('mkdir -p %s%s/mnt' % (path1, i[0]))
+                   os.system('mkdir -p %s%s/rw' % (path1, i[0]))
+                   os.system('zfs set mountpoint=%s%s/rw %s' % (path1, i[0], new_jail_zfs[-1][0]))
+                   log(0, "%s: new zfs mount point '%s%s' : '%s' " % (i[0], path1, i[0], new_jail_zfs[-1][0]), 1)
+                except:
+                   log(2, "%s: not abel to set new zfs mount point, please do this manually!" % (i[0]), 1)
+                try:
+# create sekl jail fstab file
+                   os.system('echo \"%sBASE %s%s/mnt nullfs ro 0 0\" > %s%s/rw/etc/fstab' % (path1, path1, i[0], path1, i[0]))
+                   os.system('echo \"%s%s/rw %s%s/mnt/SROOT nullfs rw 0 0\" >> %s%s/rw/etc/fstab' % (path1, i[0], path1, i[0], path1, i[0]))
+                   log(0, "%s: '%s%s/rw/etc/fstab' was updated!" % (i[0], path1, i[0]), 1)
+                except:
+                   log(2, "%s: '%s%s/rw/etc/fstab' was not updated!" % (i[0], path1, i[0]), 1)
 
+      new_jail.extend(['#@# local settings #@#'])
       new_jail.extend(['}', ' '])
 
 # append jail confi to jail.conf
