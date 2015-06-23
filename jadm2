@@ -31,7 +31,7 @@ OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITU
 # cmd - used for jadm command shell
 # paramiko - used for jail migration via ssh
 # socket - jadm client/server
-# ftplib - download freebsd bin install files
+# urllib - download freebsd bin install files
 # hashlib library (md5 file check)
 
 from datetime import datetime
@@ -52,7 +52,7 @@ import threading
 import paramiko
 import socket
 import select
-import ftplib
+import urllib
 
 ########################################################################################
 # Main config vars:
@@ -1660,13 +1660,10 @@ def BASE(src, path = None):
        path = path[:-1]
 
    path = '%s/BASE' % path
-
+# if folder exist exit
    if os.path.isdir('%s' % path) == True:
-       log(2, "'%s' already exists!" % path)
-       return False
-   else:
-      subprocess.call(['mkdir', '-p', '%s' % path])
-      log(0, "'%s' was created!" % path)
+      log(2, "'%s' already exists!" % path)
+      return False
 
 # install from bsd.txz files
    if src == 'bsd':
@@ -1678,25 +1675,28 @@ def BASE(src, path = None):
       if os.path.exists("/usr/freebsd-dist") == False:
           subprocess.call(['mkdir', '-p','/usr/freebsd-dist'])
 
-# install BASE from bsd txz
+# downlaod BASE files
       for s in sources:
          if os.path.exists("/usr/freebsd-dist/%s" % s) == False:
             log(2, "'%s' cannot be found!" % s)
 # try to download freebsd src file if not exist
             try:
-               log(0, "try to download '%s' from 'ftp.freebsd.org'!" % s)
-               ftp = ftplib.FTP("ftp.freebsd.org")
-               ftp.login()
-               ftp.cwd("/pub/FreeBSD/releases/%s/%s-RELEASE/" % (hwplatform, release))
-               ftp.retrbinary("RETR %s" % s ,open('/usr/freebsd-dist/%s' % s, 'wb').write)
-               log(0, "'%s' was successful downloaded!" % s)
-               ftp.quit()
+               log(0, "downloading '%s' from 'ftp.freebsd.org' via http!" % s)
+               urllib.urlretrieve ("http://ftp.freebsd.org/pub/FreeBSD/releases/%s/%s-RELEASE/%s" % (hwplatform, release, s), "/usr/freebsd-dist/%s" % s)
+               log(0, "'%s' downloaded!" % s)
             except:
                log(2, "'%s' cannot be downloaded!" % s)
                return False
+
+# create BASE folder befire install
+   subprocess.call(['mkdir', '-p', '%s' % path])
+   log(0, "'%s' was created!" % path)
+
 # extract freebsd src file
-         subprocess.call(['tar', '-xf', '/usr/freebsd-dist/%s' % s, '-C', path])
-         log(0, "'%s' was successful extracted in '%s'!" % (s, path))
+   if src == 'bsd':
+       for s in sources:
+          subprocess.call(['tar', '-xf', '/usr/freebsd-dist/%s' % s, '-C', path])
+          log(0, "'%s' was successful extracted in '%s'!" % (s, path))
 
    if src == 'src':
       try:
