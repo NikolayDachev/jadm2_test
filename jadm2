@@ -1747,7 +1747,7 @@ def cli():
    """
 ########################################################################################
 #  jadm command line interface
-#
+#  -y, -c, -m, -v, -a, -i, -h, -update
    """
 
 # cli auto confirm
@@ -1770,7 +1770,7 @@ def cli():
 # remove ['-v', '-y'] from cmd list
    sys.argv = [x for x in sys.argv if x not in ['-v', '-y']]
 
-   if sys.argv[1] in ['-c', '-m', '-i']:
+   if sys.argv[1] in ['-c', '-m', '-i', '-a', '-h']:
 # cli create or modify jail
       if '-c' in sys.argv or '-m' in sys.argv:
             if '-c' in sys.argv and '-m' in sys.argv:
@@ -1783,6 +1783,13 @@ def cli():
 # cli jail - os info
       if sys.argv[1] == '-i':
             welcome()
+            sys.exit(0)
+      if sys.argv[1] == '-a':
+            lcmd().onecmd('about')
+            sys.exit(0)
+      if sys.argv[1] == '-h':
+            lcmd().onecmd('cli')
+            lcmd().onecmd('help')
             sys.exit(0)
 
       jadmCommand = ''
@@ -3491,7 +3498,22 @@ Migrate jail(s) to remote server (NO encryption!)
    def do_cli(self, arg):
       """
 Jadm Operating System Command Line Interface
----------------------------------------------
+Can use any jadm command directly from OS cli (except 'server')
+---------------------------------------------------------------
+
+-- USAGE: cli
+    jadm (-y, -c, -m, -v, -a, -i, -h) command ..., -update
+
+-- KEYS
+   -y (auto confirm) will not prompt for any conformation!
+   -c (create new jail ) cannot be used wiht '-m'
+   -m (modify existing jail) cannot be used with '-c'
+   -v (verbose when start/stop jail)
+   -i (jadm info)
+   -a (jadm about)
+   -h (help) list of jadm commands
+   -update (try to update /etc/jail.conf with jadm ver.2x format)
+   -- jadm cannot guaranty 100% success, backup file will be created.
       """
       lcmd().onecmd('help cli')
 
