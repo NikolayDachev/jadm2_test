@@ -1814,8 +1814,35 @@ def jail_input_cli(cliargv):
        if len(i) > 1:
            jail[i[0]] = i[1:]
 
+# check for existing jail name/id
+   if 'id' in jail.keys() and 'name' not in jail.keys():
+     print jail['id']
+     if len(jail['id']) > 2:
+        log(2, "jail id was not specified correctly!")
+        sys.exit(2)
+
+     try:
+        int(jail['id'][0])
+     except:
+        log(2, "jail id was not specified correctly!")
+        sys.exit(2)
+
+# check if jail exist
+     isjail = check_jail_Setting('modify', jail['id'][0])
+     if isjail == False:
+        sys.exit(2)
+     else:
+        if isjail['name'] == 'BASE':
+           log(2, "'BASE' jail can't be modified!")
+           sys.exit(2)
+     if 'name' not in jail.keys() or len(jail['name']) > 2:
+        jail['name'] = [isjail['name']]
+# replace id if we change it
+     if len(jail['id']) == 2:
+         jail['id'] = [jail['id'][1]]
+
    if 'name' not in jail.keys() or len(jail['name']) > 2:
-      log(2, "jail name/jid was not specified correctly!")
+      log(2, "jail name was not specified correctly!")
       sys.exit(2)
 
 # check if we have all needed arguments to create jail
@@ -3134,7 +3161,10 @@ Create new jail
    - (usage: create /existing/jail/rootpath)
 
 -- CLI USAGE
-   - example:
+   - syntax
+      option:value:value2
+
+   - example
       jadm -y -c name:cli_jail hostname:cli_jail.local.lan id:12 ip:192.168.1.20 vnet:192.168.1.1 zfs:jails/cli_jail:3G path:/jails install:bsd
 
    -y (auto confirm)
@@ -3183,9 +3213,29 @@ Modify existing jail
    - interactive modify existing jail (usage: modify 'name/jid') without arguments
 
 -- CLI USAGE
-   - example:
-      jadm -m name:cli_jail3:jail3 id:34 ip:3.3.3.3 path:/jails/modjails
+   - syntax
+      option:original_value:new_value
 
+   - examples
+      jadm -m name:cli_jail3:jail3 id:34 ip:3.3.3.3 path:/jails/modjails
+      jadm -m id:34 zfs:quota:4G
+      jadm -m name:cli_jail3:new_jail3_name
+      jadm -m id:34:23
+
+   -y (auto confirm)
+   -m (modify)
+
+   - minimal
+      name: new jail name
+      id: new jail id (jid)
+
+   - optional
+      hostname: jail new hostname
+      ip: jail ip address
+      vnet: new vnet jail gateway
+      path: new jail rootpath
+      zfs: new jail rootzfs
+      zfs:quota: new zfs quota 'xxx('K', 'M', 'G', 'T', 'P', 'E')'
        """
        jail_input(arg)
 
@@ -3197,14 +3247,23 @@ Modify existing jail
          return completions
 
    def do_destroy(self, arg):
-        """ Destroy jail and delete jail data/zfs
-        - usage: destroy 'name/jid'
+        """
+Destroy jail and delete jail data/zfs
+-------------------------------------
+
+-- USAGE: destroy
+   (destroy 'name/jid')
         """
         jail_destroy(arg, 'destroy')
 
    def do_remove(self, arg):
-        """ Remove jail but keep jail data/zfs
-        - usage: remove 'name/jid'
+        """
+
+Remove jail but keep jail data/zfs
+----------------------------------
+
+-- USAGE: remove
+   (remove 'name/jid')
         """
         jail_destroy(arg, 'remove')
 
@@ -3238,35 +3297,58 @@ Exit from JADM
         sys.exit(0)
 
    def do_start(self, arg):
-        """ Start jail
-        - start jail: start 'name/jid'
-        - start all jails: start all
+        """
+Start jail
+----------
+
+-- USAGE: start
+   - start jail: (usage: start 'name/jid')
+   - start all jails: (usage: start all)
         """
         startstop_jail(arg, 'start')
 
    def do_stop(self, arg):
-        """ Stop jail
-        - stop jail: stop 'name/jid'
-        - stop all jails: stop all
+        """
+Stop jail
+----------
+
+-- USAGE: stop
+   - stop jail: (usage: stop 'name/jid')
+   - stop all jails: (usage: stop all)
         """
         startstop_jail(arg, 'stop')
 
    def do_reboot(self, arg):
-        """ Reboot jail
-        - reboot jail: reboot 'name/jid'
-        - reboot all jails: reboot all
+        """
+Reboot jail
+-----------
+
+-- USAGE: reboot
+   - reboot jail: (usage: reboot 'name/jid')
+   - reboot all jails: (usage: reboot all)
         """
         startstop_jail(arg, 'reboot')
 
    def do_shell(self, arg):
-        """  Enter in Jail
-        - usage: shell 'name/jid'
+        """
+Enter in Jail (jexec root shell)
+--------------------------------
+
+-- USAGE: shell
+   (shell 'name/jid')
         """
         jail_shell(arg)
 
    def do_verbose(self, arg):
-        """  Verbose output when start/stop jail
-        - usage: verbose
+        """
+Verbose output when start/stop jail
+-----------------------------------
+
+-- USAGE: verbose
+   (by default is off)
+
+-- CLI USAGE
+   -v (verbose output)
         """
         global verbose
         if verbose == 0:
@@ -3277,8 +3359,15 @@ Exit from JADM
            log(0, "start/stop verbose mode disabled")
 
    def do_snap(self, arg):
-        """  Enter in Jail
-        - usage: shell 'name/jid'
+        """
+Jail ZFS snapshots
+------------------
+
+-- USAGE: snap
+   - list jail zfs snapshot (usage: snap 'name/jid')
+   - create jail zfs snapshot (usage: snap 'name/jid' create)
+   - remove jail zfs snapshot (usage: snap 'name/jid' remove 'sanp number')
+   - restore jail zfs snaphsot (usage: snap 'name/jid'restore 'snap number')
         """
         arg = str(arg).split(' ')
         arg = [i for i in arg if i != '']
@@ -3307,22 +3396,48 @@ Exit from JADM
         return completions
 
    def do_server(self, arg):
-        """  Jadm network server
-        - usage: server
+        """
+Jadm NOT encrypted network server - accept migrated jails (NO CLI)
+------------------------------------------------------------------
+
+-- USAGE: server
+   - start net server (usage: server)
+   (by default use ip:0.0.0.0 and port:4555)
+   - set ip address (usage: sever ip:x.x.x.x)
+   - set port (usage server port:xxxx)
+   - start with set ip/port (usage: server ip:x.x.x.x port:xxxx)
+
         """
         arg = str(arg).split(' ')
         arg = [i for i in arg if i != '']
 
         global LHOST
         global LPORT
+        nhost = LHOST
+        nport = LPORT
 
-        jserver = net_server(0, LHOST, LPORT, 0)
+        if len(arg):
+           for i in arg:
+              hp = i.split(':')
+              if hp[0] == 'port':
+                 try:
+                     int(hp[1])
+                     nport = hp[1]
+                 except:
+                     log(2, "'%s' is not a valid network port number!" % hp[1])
+                     return False
+              if hp[0] == 'host':
+                 nhost = hp[1]
+
+        jserver = net_server(0, nhost, nport, 0)
         t = threading.Thread(target=jserver.server)
         t.daemon = True
         t.start()
 
    def do_migrate(self, arg):
-        """  Migrate jail to remote server
+        """
+Migrate jail to remote server (NO encryption!)
+----------------------------------------------
         - usage: migrate 'name/jid' re.mo.te.ip:port /remote/path(:zfs/path)
         """
         arg = str(arg).split(' ')
@@ -3330,14 +3445,16 @@ Exit from JADM
 
         global LHOST
         global LPORT
+        nhost = LHOST
+        nport = LPORT
 
         server = str(arg[1]).split(':')
         rip = server[0]
         if len(server) == 2:
-            if server[1] != LPORT:
+            if server[1] != nport:
                 rport = server[1]
         else:
-            rport = LPORT
+            rport = nport
 
         jclient = net_server(arg[0], rip, rport, arg[-1])
         jclient.migrate_client()
