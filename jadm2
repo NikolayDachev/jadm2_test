@@ -1494,6 +1494,7 @@ def modify_jail(newjail):
 # if we change the path
    if move_zfs_path == 0:
       if newjail['path'] != modjail['path']:
+         subprocess.call(['mkdir', '-p', newjail['path']])
          subprocess.call(['mv', '-f',modjail['path'], newjail['path']])
          log(0, "jail path '%s' was modified to '%s'!" % (modjail['path'], newjail['path']))
 
@@ -3152,6 +3153,7 @@ Create new jail
          (template) - install:template:jail(name/id) - use existing jail as template
 
    - optional
+      (by default jadm not create zfs/vnet jails)
       vnet: create vnet jail - gateway ip address
       zfs: create zfs jail zfs:zroot/jail_zfs:quota 'xxx('K', 'M', 'G', 'T', 'P', 'E')'
       - can use and zpool only - zfs:zroot:quota
@@ -3173,8 +3175,17 @@ Create new jail
          jail_input()
 
    def do_modify(self, arg):
-       """ Modify jail
-        - usage: modify 'name/jid'
+       """
+Modify existing jail
+--------------------
+
+-- USAGE: create
+   - interactive modify existing jail (usage: modify 'name/jid') without arguments
+
+-- CLI USAGE
+   - example:
+      jadm -m name:cli_jail3:jail3 id:34 ip:3.3.3.3 path:/jails/modjails
+
        """
        jail_input(arg)
 
