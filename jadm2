@@ -2953,36 +2953,38 @@ class lcmd(cmd.Cmd):
          pass
 
    def do_list(self, arg):
-      """ List of jails in table format
-      - FLAGS
-      S - skeleton model jail
-      V - vnet jail
-      Z - zfs jail
-      _DYING - dying jail
+      """
+List of jails
+-------------
+-- FLAGS
+   S - skeleton model jail
+   V - vnet jail
+   Z - zfs jail
+   _DYING - dying jail
 
-      - usage: list
+-- USAGE: list
+   (search options)
+   - only actvie jails (usage: list active)
+   - only inactive jails (usage: list inactive)
+   - only dying jails (usage: list dying)
+   - no fully configured jails (usage: list empty)
+   - by name (usage: list 'name/jid' )
+   - by hostname (usage: list hostname 'jail hostname' )
+   - by path (usage: lisy path '/jail/home/path' )
+   - by ipaddress (usage: list ip 'ipaddress' )
+   - by gateway (usage: list gw 'gateway ip' )
+   - only vnet jails (usage: list vnet )
+   - only none vnet jails (usage: list novnet )
+   - only skel jails (usage: list skel )
+   - only none skel jails (usage: list noskel )
+   - only none zfs jails (usage list nozfs)
 
-      (search options)
-      - only actvie jails (usage: list active)
-      - only inactive jails (usage: list inactive)
-      - only dying jails (usage: list dying)
-      - no fully configured jails (usage: list empty)
-      - by name (usage: list 'name/jid' )
-      - by hostname (usage: list hostname 'jail hostname' )
-      - by path (usage: lisy path '/jail/home/path' )
-      - by ipaddress (usage: list ip 'ipaddress' )
-      - by gateway (usage: list gw 'gateway ip' )
-      - only vnet jails (usage: list vnet )
-      - only none vnet jails (usage: list novnet )
-      - only skel jails (usage: list skel )
-      - only none skel jails (usage: list noskel )
-      - only none zfs jails (usage list nozfs)
-      --- apply only on zfs jails ---
-      - only zfs jails (usage: list zfs)
-      - by zfs quota (usage: list quota 'xxx('K', 'M', 'G', 'T', 'P', 'E')')
-      show jails with quota = or > form x number
-      - by zfs used space (usage: list used xxx('K', 'M', 'G', 'T', 'P', 'E')')
-      show jails with used space = or > form x number
+-- ZFS JAILS
+   - only zfs jails (usage: list zfs)
+   - by zfs quota (usage: list quota 'xxx('K', 'M', 'G', 'T', 'P', 'E')')
+   show jails with quota = or > form x number
+   - by zfs used space (usage: list used 'xxx('K', 'M', 'G', 'T', 'P', 'E')')
+   show jails with used space = or > form x number
       """
       arg = str(arg).split(' ')
 
@@ -3000,17 +3002,40 @@ class lcmd(cmd.Cmd):
          return completions
 
    def do_jls(self,  arg):
-      """ Short list of jails in table format
-      - FLAGS
-      S - skeleton model jail
-      V - vnet jail
-      Z - zfs jail
-      _DYING - jails is dying
-
-      - usage: jls
-
-        same as list (show jails table in short format)
       """
+List of jails in short format
+-----------------------------
+-- FLAGS
+   S - skeleton model jail
+   V - vnet jail
+   Z - zfs jail
+   _DYING - dying jail
+
+-- USAGE: jls
+   (search options)
+   - only actvie jails (usage: jls active)
+   - only inactive jails (usage: jls inactive)
+   - only dying jails (usage: jls dying)
+   - no fully configured jails (usage: jls empty)
+   - by name (usage: jls 'name/jid' )
+   - by hostname (usage: jls hostname 'jail hostname' )
+   - by path (usage: lisy path '/jail/home/path' )
+   - by ipaddress (usage: jls ip 'ipaddress' )
+   - by gateway (usage: jls gw 'gateway ip' )
+   - only vnet jails (usage: jls vnet )
+   - only none vnet jails (usage: jls novnet )
+   - only skel jails (usage: jls skel )
+   - only none skel jails (usage: jls noskel )
+   - only none zfs jails (usage jls nozfs)
+
+-- ZFS JAILS
+   - only zfs jails (usage: jls zfs)
+   - by zfs quota (usage: jls quota 'xxx('K', 'M', 'G', 'T', 'P', 'E')')
+   show jails with quota = or > form x number
+   - by zfs used space (usage: jls used 'xxx('K', 'M', 'G', 'T', 'P', 'E')')
+   show jails with used space = or > form x number
+      """
+
       arg = str(arg).split(' ')
       arg.insert(0,'jls')
       arg = [i for i in arg if i != '']
@@ -3025,17 +3050,25 @@ class lcmd(cmd.Cmd):
          return completions
 
    def do_gateways(self,  arg):
-      """ Show system 'bridgeX' interfaces
-          used for jail gateways and OS (system) default gateway
+      """
+Show system 'bridgeX' ip addresses and OS (system) default gateway
+used for jails gateways.
+------------------------------------------------------------------
+
+-- USAGE: gateways
       """
 
       gateways(gwtable = 1)
 
    def do_globals(self,  arg):
-      """Globals settings
-        - list of globals settings (usage: globals)
-        - remove global setting (usage: globals remove 'setting number' )
-        - add global setting (usage: globals add 'setting=val')
+      """
+Globals settings applayed to all jails
+--------------------------------------
+
+-- USAGE: globals
+   - list of globals settings (usage: globals)
+   - add global setting (usage: globals add 'setting=val')
+   - remove global setting (usage: globals remove 'setting number' )
       """
 
       arg = str(arg).split(' ')
@@ -3054,10 +3087,14 @@ class lcmd(cmd.Cmd):
          return completions
 
    def do_locals(self,  arg):
-      """Jails Locals settings
-        - list of jail locals settings (usage: locals 'name/jid')
-        - remove jail local setting (usage: locals 'name/jid' remove 'setting number' )
-        - add jail local setting (usage: locals 'name/jid' add 'setting=val')
+      """
+Jails Local settings
+---------------------
+
+-- USAGE: locals
+   - list of jail locals settings (usage: locals 'name/jid')
+   - add jail local setting (usage: locals 'name/jid' add 'setting=val')
+   - remove jail local setting (usage: locals 'name/jid' remove 'setting number' )
       """
 
       arg = str(arg).split(' ')
@@ -3078,16 +3115,46 @@ class lcmd(cmd.Cmd):
          return completions
 
    def do_create(self, arg):
-      """ Create new jail
-       * BASE jail
-       - create new BASE jail    (usage: create BASE 'bsd/src' '/top/BASE/folder')
-       - install BASE ports tree (usage: create BASE ports install)
-       - update BASE  ports tree (usage: create BASE ports update)
+      """
+Create new jail
+---------------
 
-       * Import existing 'jadm' jail
-       - usage: create /exsiting/jail/rootpath
+-- USAGE: create
+   - interactive create new jail (usage: create) without arguments
 
-       * to create new jail (usage: create) without arguments
+-- BASE JAIL
+   - create new BASE jail (usage: create BASE 'bsd/src' '/top/BASE/folder')
+      (bsd) install from base.txz
+      (src) install from freebsd src /usr/src
+   - install BASE ports tree (usage: create BASE ports install)
+   - update BASE ports tree (usage: create BASE ports update)
+
+-- IMPORT existing 'jadm' jail, /etc/jails.conf should exist under jail rootfolder
+   - (usage: create /existing/jail/rootpath)
+
+-- CLI USAGE
+   - example:
+      jadm -y -c name:cli_jail hostname:cli_jail.local.lan id:12 ip:192.168.1.20 vnet:192.168.1.1 zfs:jails/cli_jail:3G path:/jails install:bsd
+
+   -y (auto confirm)
+   -c (create)
+
+   - minimal
+      name: jail name
+      hostname: jail hostname
+      id: jail id (jid)
+      ip: jail ip address
+      path: jails rootpath (jail will be created in folder under this one) - main jails folder
+      install: install methods
+         (bsd) install from base.txz
+         (src) install from freebsd src /usr/src
+         (skel) install skeleton (BASE) jail model
+         (template) - install:template:jail(name/id) - use existing jail as template
+
+   - optional
+      vnet: create vnet jail - gateway ip address
+      zfs: create zfs jail zfs:zroot/jail_zfs:quota 'xxx('K', 'M', 'G', 'T', 'P', 'E')'
+      - can use and zpool only - zfs:zroot:quota
       """
 
       arg = str(arg).split(' ')
@@ -3131,18 +3198,30 @@ class lcmd(cmd.Cmd):
         jail_destroy(arg, 'remove')
 
    def do_about(self, arg):
-       """ About JADM and license info
+       """
+About JADM and license info
+---------------------------
+
+-- USAGE: about
        """
        print about()
 
    def do_exit(self, arg):
-        """ Exit from JADM
+        """
+Exit from JADM
+--------------
+
+-- USAGE: exit
         """
         print "Good bye!"
         sys.exit(0)
 
    def do_quit(self, arg):
-        """ Exit from JADM
+        """
+Exit from JADM
+--------------
+
+-- USAGE: quit
         """
         print "Good bye!"
         sys.exit(0)
