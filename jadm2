@@ -3436,9 +3436,33 @@ Jadm NOT encrypted network server - accept migrated jails (NO CLI)
 
    def do_migrate(self, arg):
         """
-Migrate jail to remote server (NO encryption!)
-----------------------------------------------
-        - usage: migrate 'name/jid' re.mo.te.ip:port /remote/path(:zfs/path)
+Migrate jail(s) to remote server (NO encryption!)
+-------------------------------------------------
+
+-- USAGE: migrate
+   - syntax
+     migrate re.mo.te.ip:port 'name/jid'=/remote/jail/rootpath(:zfs/path)
+     (separate jai; name/jid and remote jaisl path:zfs with '=')
+
+   - examples
+   (migrate one jail)
+    migrate 192.168.1.32:4555 migjail=/jails/migrated
+
+   (migrate zfs jail)
+    migrate 192.168.1.32:4555 migjail=/jails/migrated:zroot/jails
+
+   (migrate multiple jails separated with ',' - use default port)
+    migrate 192.168.1.32 migjail=/jails/migrated, 34=/jails/migrated , otherjail=/jails/migrated:zroot/jails
+
+   - minimal
+      - destination server ip address
+      - jail name/id
+      - remote jail rootpath
+
+   - optional
+      - :port - destination server port
+      - :zfs/path - remote jail zfs
+
         """
         arg = str(arg).split(' ')
         arg = [i for i in arg if i != '']
@@ -3448,7 +3472,8 @@ Migrate jail to remote server (NO encryption!)
         nhost = LHOST
         nport = LPORT
 
-        server = str(arg[1]).split(':')
+# use custom port if is needed
+        server = str(arg[0]).split(':')
         rip = server[0]
         if len(server) == 2:
             if server[1] != nport:
@@ -3456,8 +3481,19 @@ Migrate jail to remote server (NO encryption!)
         else:
             rport = nport
 
-        jclient = net_server(arg[0], rip, rport, arg[-1])
-        jclient.migrate_client()
+# list for multiple jails and migrate
+        mjails = ' '.join(arg[1:]).split(',')
+        for i in mjails:
+            mj = i.split('=')
+            jclient = net_server(mj[0].strip(' '), rip, rport, mj[-1].strip(' '))
+            jclient.migrate_client()
+
+   def do_cli(self, arg):
+      """
+Jadm Operating System Command Line Interface
+---------------------------------------------
+      """
+      lcmd().onecmd('help cli')
 
 ########################################################################################
 # Start Jadm script
