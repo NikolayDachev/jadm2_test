@@ -2267,6 +2267,7 @@ def fix_jailconf(conf_f):
 # some default vars
    bridge1 = "vnet bridge"
    jgateway = "vnet gateway"
+   path1 = False
 
 # check if this is jadm 1 file
    jadm1 = ['$jzfs',  '$jedir', '$bridge', '$epair']
@@ -2283,6 +2284,9 @@ def fix_jailconf(conf_f):
                   bridge1 = x.strip(y).replace('"', '').replace(';', '').replace('=', '').replace(' ', '')
               break
        if test_jc == jadm1:
+           if path1 == False:
+               log(2, "jail.conf is JADM ver 1.x file but 'path' was not found!")
+               sys.exit(2)
            log(0, "'%s' is JADM ver 1.x: path = '%s' : $bridge = '%s'" % (conf_f, path1, bridge1))
            isjadm1 = 1
            break
@@ -2338,11 +2342,11 @@ def fix_jailconf(conf_f):
            fj = []
 
 # append golabl vars to jail.conf
+   basejails = []
    if isjadm1 == 0:
       fixed_jail_conf = mas[:foundjails[0][1]]
    else:
 # check for BASE-jails before we continue
-       basejails = []
        for i in foundjails:
            if isjadm1 == 1:
               if 'BASE-' in i[0]:
@@ -2374,6 +2378,13 @@ def fix_jailconf(conf_f):
       isvnet = 0
       jail = mas[i[1]:i[2]]
       new_jail_locals = []
+# try to fix path and path1
+      if path1 == False:
+         for i in jail:
+             if 'path' in i:
+                 i.replace('"', '').replace(';','')
+                 i = i.split('=')
+                 path1 = i[1]
 
 # 0. Fix BASE
       if i[0] == 'BASE':
@@ -2515,9 +2526,10 @@ def fix_jailconf(conf_f):
                    log(2, "%s: '%s%s/rw/etc/fstab' was not updated!" % (i[0], path1, i[0]), 1)
 
       new_jail.extend(['#@# local settings #@#'])
-      if new_jail_locals:
-          for i in new_jail_locals:
-              new_jail.append(i)
+      print new_jail_locals
+     # if new_jail_locals:
+     #     for i in new_jail_locals:
+     #         new_jail.append(i)
       new_jail.extend(['}', ' '])
 
 # append jail confi to jail.conf
