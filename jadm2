@@ -2987,6 +2987,10 @@ class lcmd(cmd.Cmd):
    def emptyline(self):
          pass
 
+   def default(self, line):
+      log(2, "'%s' not working, please use 'help' or '-h only for cli'" % line)
+      return cmd.Cmd.default(self, line)
+
    def do_list(self, arg):
       """
 List of jails
