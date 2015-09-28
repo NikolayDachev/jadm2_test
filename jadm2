@@ -3280,7 +3280,10 @@ Destroy jail and delete jail data/zfs
 -------------------------------------
 
 -- USAGE: destroy
-   (destroy 'name/jid')
+   - destroy jail (destroy 'name/jid')
+   - destroy BASE jail and clear '/usr/freebsd-dist/' folder
+     (destroy BASE clear)
+
         """
         arg = str(arg).split(' ')
         arg = [i for i in arg if i != '']
