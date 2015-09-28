@@ -59,7 +59,7 @@ import urllib
 ########################################################################################
 
 # jadm version
-jadm_version = "ver. 2.0"
+jadm_version = "ver. 2.0.1"
 
 # jail.conf location by default /etc/jail.conf
 jailconf = '/etc/jail.conf'
@@ -1559,7 +1559,7 @@ def import_jail(jpath):
    update_jail_conf(['new_jail', [i_jail], 'create'])
    log(0, "jail '%s' was successful imported!" % i_jail['name'], 1)
 
-def jail_destroy(jailname, action = None):
+def jail_destroy(jailname, action = None, base = None):
    """
 ########################################################################################
 #  Remove / Destroy existing jail
@@ -1571,7 +1571,8 @@ def jail_destroy(jailname, action = None):
    rmjail = check_jail_Setting('modify', jailname)
    if rmjail == False:
        return False
-
+   if base != None:
+      log(1, "jadm will clear '/usr/freebsd-dist/' folder")
    if autoc != 'y':
       yn = raw_input("will %s '%s' jail please confirm (y):> " % (action, rmjail['name']))
    else:
@@ -1580,6 +1581,10 @@ def jail_destroy(jailname, action = None):
    if 'y' not in yn:
       log(0, 'user exit - !')
       return False
+
+   if base != None:
+      os.system('rm -rf /usr/freebsd-dist/*')
+      log(1, "jadm clear '/usr/freebsd-dist/' folder", 1)
 
    if action == 'remove':
        update_jail_conf(['rm_jail', rmjail])
@@ -3277,7 +3282,17 @@ Destroy jail and delete jail data/zfs
 -- USAGE: destroy
    (destroy 'name/jid')
         """
-        jail_destroy(arg, 'destroy')
+        arg = str(arg).split(' ')
+        arg = [i for i in arg if i != '']
+
+        if arg[0] == 'BASE' or arg[0] == '0':
+           if arg[0] == '0':
+              arg[0] = 'BASE'
+           if len(arg) > 1:
+              if arg[1] == 'clear':
+                 jail_destroy(arg[0], 'destroy', 'clear')
+
+        jail_destroy(arg[0], 'destroy')
 
    def do_remove(self, arg):
         """
