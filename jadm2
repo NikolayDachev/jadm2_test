@@ -59,7 +59,7 @@ import urllib
 ########################################################################################
 
 # jadm version
-jadm_version = "ver. 2.0.1"
+jadm_version = "ver. 2.0.2"
 
 # jail.conf location by default /etc/jail.conf
 jailconf = '/etc/jail.conf'
@@ -1019,6 +1019,9 @@ def jail_input(modify = None):
 
 # enter ip address already 
            if ikey == 'ip':
+              if 'dhcp' in ekey:
+                 new_jail['$jip'] = 'dhcp'
+                 break
               ip = check_jail_Setting(ikey, [ekey, new_jail, modjail])
               if ip == False:
                  continue
