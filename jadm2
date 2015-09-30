@@ -2207,7 +2207,12 @@ def startstop_jail(jnid = None, action = None):
       '''
       if isjail['$jip'] == 'dhcp':
          checkmac = locals(isjail['name'], 'noop')
-         if 'ether' not in checkmac:
+         ether_find = 0
+         for e in checkmac:
+             if  'ether' in e[1]:
+                 ether_find = 1
+                 break
+         if ether_find == 0:
              cmd = "jexec %s ifconfig epair%sb | awk '/ether/ {print $2}'" % (isjail['jid'],isjail['jid'])
              ps = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
              jether = ps.communicate()[0].strip("\n")
