@@ -1577,6 +1577,14 @@ def import_jail(jpath):
    update_jail_conf(['new_jail', [i_jail], 'create'])
    log(0, "jail '%s' was successful imported!" % i_jail['name'], 1)
 
+def remote_nfs_jail(rpaht, path):
+   """
+########################################################################################
+#  add remote nfs jail
+#
+   """
+   pass
+
 def jail_destroy(jailname, action = None, base = None):
    """
 ########################################################################################
