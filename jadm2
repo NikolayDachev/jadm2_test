@@ -59,7 +59,7 @@ import urllib
 ########################################################################################
 
 # jadm version
-jadm_version = "ver. 2.0.2"
+jadm_version = "ver. 2.0.3"
 
 # jail.conf location by default /etc/jail.conf
 jailconf = '/etc/jail.conf'
@@ -81,40 +81,18 @@ LHOST = '0.0.0.0'
 LPORT = 4555
 
 # network config
-# newmac generate random mac address option in jail.conf
-newmac = "$newmac = \"dd if=/dev/urandom bs=1024 count=1 2>/dev/null|md5|sed 's/^\\\\(..\\\\)\\\\(..\\\\)\\\\(..\\\\).*$/02\\\\:ff\\\\:c0\\\\:\\\\1:\\\\2:\\\\3/'\";"
 
 # vnet
 vnet = [
 '### network settings ###',
 'vnet;',
 'vnet.interface = "epair${jid}b";',
-newmac,
 'exec.start = "ifconfig lo0 127.0.0.1/8";',
 'exec.prestart = "ifconfig epair${jid} create";',
-'exec.prestart += "$newmac |xargs ifconfig epair${jid}b ether";',
 'exec.prestart += "ifconfig $bridge addm epair${jid}a up";',
 'exec.prestart += "ifconfig epair${jid}a up";',
 'exec.start += "ifconfig epair${jid}b $jip";',
 'exec.start += "route add default $jgw";',
-'exec.start += "/bin/sh /etc/rc";',
-'exec.poststop = "ifconfig $bridge deletem epair${jid}a";',
-'exec.poststop += "ifconfig epair${jid}a destroy";',
-'exec.stop = "/bin/sh /etc/rc.shutdown";',
-'exec.clean;',
-'persist;'
-]
-
-# vnet_dhcp
-vnet_dhcp = [
-'### network settings ###',
-'vnet;',
-'vnet.interface = "epair${jid}b";',
-'exec.start = "ifconfig lo0 127.0.0.1/8";',
-'exec.prestart = "ifconfig epair${jid} create";',
-'exec.prestart += "ifconfig $bridge addm epair${jid}a up";',
-'exec.prestart += "ifconfig epair${jid}a up";',
-'exec.start += "dhclient epair${jid}b";',
 'exec.start += "/bin/sh /etc/rc";',
 'exec.poststop = "ifconfig $bridge deletem epair${jid}a";',
 'exec.poststop += "ifconfig epair${jid}a destroy";',
@@ -526,6 +504,18 @@ def cleanlist(list):
    list = [x for x in list if x]
    return list
 
+def random_mac():
+    """
+########################################################################################
+# generate and return random ether interface mac address 02:ff:c0
+#
+    """
+    macaddr = [ 0x02, 0xff, 0xc0,
+        random.randint(0x00, 0x7f),
+        random.randint(0x00, 0xff),
+        random.randint(0x00, 0xff) ]
+    return ':'.join(map(lambda x: "%02x" % x, macaddr))
+
 def ch_ipv4(sp):
     """
 ########################################################################################
@@ -772,11 +762,7 @@ def update_jail_conf(update):
 # jail networking
       if jail['vnet'] == 1:
          jail_conf.extend(['$bridge = "%s";' % jail['$bridge']])
-# check if we will use dhcp config for vnet
-         if jail['$jip'] == 'dhcp':
-            jail_conf.extend(vnet_dhcp)
-         else:
-            jail_conf.extend(vnet)
+         jail_conf.extend(vnet)
       else:
          jail_conf.extend(net)
 # if this is skel jail
@@ -785,7 +771,7 @@ def update_jail_conf(update):
 
 # update jlc[]
       if update[2] == 'create':
-         jail_conf.extend(['#@# local settings #@#', '}', ' '])
+         jail_conf.extend(['#@# local settings #@#', 'exec.prestart += "ifconfig epair${jid}b ether %s";' % random_mac(), '}', ' '])
          jcl.extend(jail_conf)
 
       if update[2] == 'modify':
@@ -851,11 +837,7 @@ def update_local_jail_conf(jail):
 # jail networking
    if 'vnet' in jail.keys():
          jail_conf.extend(['$bridge = "%s";' % jail['$bridge']])
-# check if we will use dhcp config for vnet
-         if jail['$jip'] == 'dhcp':
-            jail_conf.extend(vnet_dhcp)
-         else:
-            jail_conf.extend(vnet)
+         jail_conf.extend(vnet)
    else:
          jail_conf.extend(net)
 # if this is skel jail
