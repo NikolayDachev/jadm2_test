@@ -771,7 +771,10 @@ def update_jail_conf(update):
 
 # update jlc[]
       if update[2] == 'create':
-         jail_conf.extend(['#@# local settings #@#', 'exec.prestart += "ifconfig epair${jid}b ether %s";' % random_mac(), '}', ' '])
+         if jail['vnet'] == 1:
+             jail_conf.extend(['#@# local settings #@#', 'exec.prestart += "ifconfig epair${jid}b ether %s";' % random_mac(), '}', ' '])
+         else:
+             jail_conf.extend(['#@# local settings #@#', '}', ' '])
          jcl.extend(jail_conf)
 
       if update[2] == 'modify':
