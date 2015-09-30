@@ -59,7 +59,7 @@ import urllib
 ########################################################################################
 
 # jadm version
-jadm_version = "ver. 2.0.3"
+jadm_version = "ver. 2.0.4"
 
 # jail.conf location by default /etc/jail.conf
 jailconf = '/etc/jail.conf'
@@ -1577,13 +1577,73 @@ def import_jail(jpath):
    update_jail_conf(['new_jail', [i_jail], 'create'])
    log(0, "jail '%s' was successful imported!" % i_jail['name'], 1)
 
-def remote_nfs_jail(rpaht, path):
+def remote_nfs_jail(rpath, jpath):
    """
 ########################################################################################
 #  add remote nfs jail
 #
    """
-   pass
+   jails = load_jail_config(jailconf)[0]
+
+# create temp nfs mount folder
+   tmp_nfs = '/tmp/jadm_nfs_%s' % rpath.replace(':', '')
+   nfshost = rpath.split(':')
+
+   try:
+      log(0, "create temp folder '%s'" % tmp_nfs)
+      subprocess.call(['mkdir', '-p','%s' % tmp_nfs])
+   except:
+      log(1, "'%s' already exist" % tmp_nfs)
+      pass
+# try to mount remote path
+   try:
+      log(0, "try to mount '%s' in '%s'" % (rpath, tmp_nfs))
+      subprocess.call(['mount_nfs', rpath, tmp_nfs])
+   except:
+      log(2, "'%s' cannot be mounted in '%s'" % (rpath, tmp_nfs))
+      log(1, "remove '%s'" % (tmp_nfs))
+      return False
+
+# try to find local jail.conf
+   i_jconf = '%s/etc/jail.conf' % tmp_nfs
+   if os.path.isdir('%s/rw' % tmp_nfs) == True:
+       i_jconf = '%s/rw/etc/jail.conf' % tmp_nfs
+
+   if os.path.isfile(i_jconf) == False:
+        log(2, "'%s/etc/jail.conf' cannot be found!" % tmp_nfs)
+        return False
+
+# CREATE REMOTE JAIL
+   i_jail = load_jail_config(i_jconf)[0][0]
+   i_jail['install'] = ['nfs']
+
+# create sekl jail fstab file
+  #     os.system('echo \"%s %s/mnt nullfs ro 0 0\" > %s/rw/etc/fstab' % (base['path'], jpath, jpath))
+  #     os.system('echo \"%s/rw %s/mnt/SROOT nullfs rw 0 0\" >> %s/rw/etc/fstab' % (jpath, jpath, jpath))
+
+   i_jail['path'] = "%s/%s/%s/rw/" % (jpath, nfshost[0], i_jail['name'])
+
+  # for x in jails:
+  #     for y in ['name', 'jid', '$jip', 'path']:
+  #        if x[y] == i_jail[y]:
+  #           log(2, "jail with %s '%s' already exist (jail: %s) !" % (y, i_jail[y], x['name']))
+  #           return False
+
+   if 'vnet' not in i_jail.keys():
+       i_jail['vnet'] = 0
+
+   print i_jail
+  # update_jail_conf(['new_jail', [i_jail], 'create'])
+   log(0, "jail '%s' was successful imported from '%s'!" % (i_jail['name'], rpath), 1)
+
+# unmount and remove tempoary folder
+   try:
+      log(0, "unmount '%s' and remove '%s'" % (rpath, tmp_nfs))
+      subprocess.call(['umount', tmp_nfs])
+      return True
+   except:
+      log(2, "cannot unmount '%s' and remove '%s'" % (rpath, tmp_nfs))
+      return False
 
 def jail_destroy(jailname, action = None, base = None):
    """
@@ -3273,6 +3333,8 @@ Create new jail
             srcbuild()
          elif arg[0][0] == '/':
             import_jail(arg[0])
+         elif ':' in arg[0]:
+            remote_nfs_jail(arg[0], arg[1])
          else:
             pass
       else:
