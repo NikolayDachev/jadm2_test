@@ -110,6 +110,9 @@ net = [
 'persist;',
 ]
 
+# nfs fstab settings
+remnfs = 'nfs rw,hard,intr,bg,rsize=8192,wsize=8192,tcp 0 0'
+
 ########################################################################################
 # Main Functions
 ########################################################################################
@@ -437,6 +440,8 @@ def jail_table(mcmd):
    for i in jails:
        jail_temp_list = []
        jail_temp_list.append('')
+       if os.path.exists("%s/remote.info.jadm" % i['path']):
+           jail_temp_list[0] =  jail_temp_list[0] + 'R'
        if 'SKEL' in i.keys():
            jail_temp_list[0] =  jail_temp_list[0] + 'S'
        if 'vnet' in i.keys():
@@ -722,6 +727,8 @@ def update_jail_conf(update):
    """
    jails = load_jail_config(jailconf)[0]
    dt = str(datetime.now())
+   mset = "BASE"
+
 # make a backup
    subprocess.call(['cp', '-f', jailconf, '/tmp/jail.conf.jadm_bck'])
 
@@ -754,6 +761,11 @@ def update_jail_conf(update):
                    '$jip = "%s";' % jail['$jip'],
                    '$jgw = "%s";' % jail['$jgw'],
                    'host.hostname = "%s";' % jail['host.hostname']]
+
+# if we add remote jail
+      if jail['install'][0] == 'nfs':
+         jail['install'][0] = 'skel'
+         mset = "REMOTE"
 # jail path add /mnt is this is skel jail
       if jail['install'][0] == 'skel':
          jail_conf.extend(['path = "%s/mnt";' % jail['path']])
@@ -767,11 +779,19 @@ def update_jail_conf(update):
          jail_conf.extend(net)
 # if this is skel jail
       if jail['install'][0] == 'skel':
-         jail_conf.extend(['### BASE mount settings ###', 'mount.fstab = %s/rw/etc/fstab;' % jail['path'], 'mount.devfs;'])
+         jail_conf.extend(['### %s mount settings ###' % mset, 'mount.fstab = %s/rw/etc/fstab;' % jail['path'], 'mount.devfs;'])
 
 # update jlc[]
       if update[2] == 'create':
-         if jail['vnet'] == 1:
+# if this is remote jail
+         if mset == "REMOTE":
+            jail_conf.extend(['#@# local settings #@#'])
+            for i in jail['local_settings']:
+               if i != None:
+                  jail_conf.append('%s;' % i[1])
+            jail_conf.append('}')
+
+         elif jail['vnet'] == 1:
              jail_conf.extend(['#@# local settings #@#', 'exec.prestart += "ifconfig epair${jid}b ether %s";' % random_mac(), '}', ' '])
          else:
              jail_conf.extend(['#@# local settings #@#', '}', ' '])
@@ -1584,6 +1604,8 @@ def remote_nfs_jail(rpath, jpath):
 #
    """
    jails = load_jail_config(jailconf)[0]
+   brpath = "None"
+   dt = str(datetime.now())
 
 # create temp nfs mount folder
    tmp_nfs = '/tmp/jadm_nfs_%s' % rpath.replace(':', '')
@@ -1616,13 +1638,9 @@ def remote_nfs_jail(rpath, jpath):
 # CREATE REMOTE JAIL
    i_jail = load_jail_config(i_jconf)[0][0]
    i_jail['install'] = ['nfs']
+   i_jail['path'] = "%s/%s/%s" % (jpath, nfshost[0], i_jail['name'])
 
-# create sekl jail fstab file
-  #     os.system('echo \"%s %s/mnt nullfs ro 0 0\" > %s/rw/etc/fstab' % (base['path'], jpath, jpath))
-  #     os.system('echo \"%s/rw %s/mnt/SROOT nullfs rw 0 0\" >> %s/rw/etc/fstab' % (jpath, jpath, jpath))
-
-   i_jail['path'] = "%s/%s/%s/rw/" % (jpath, nfshost[0], i_jail['name'])
-
+# check if remote jail already exist on localhost
   # for x in jails:
   #     for y in ['name', 'jid', '$jip', 'path']:
   #        if x[y] == i_jail[y]:
@@ -1633,7 +1651,27 @@ def remote_nfs_jail(rpath, jpath):
        i_jail['vnet'] = 0
 
    print i_jail
-  # update_jail_conf(['new_jail', [i_jail], 'create'])
+
+# create folders
+   try:
+      subprocess.call(['mkdir', '-p', "%s/mnt" % i_jail['path']])
+      subprocess.call(['mkdir', '-p', "%s/%s/%s/rw/etc/" % (jpath, nfshost[0], i_jail['name'])])
+      log(0, "jadm create %s/%s/%s/{rw/etc/, mnt/} folders" % (jpath, nfshost[0], i_jail['name']))
+   except:
+      log(2, "jadm cannot create %s/%s/%s/{rw/etc/, mnt/} folders" % (jpath, nfshost[0], i_jail['name']))
+      return False
+
+# create remote jail fstab file
+   os.system('echo \"%s %s/mnt %s\" > %s/%s/%s/rw/etc/fstab' % (rpath, i_jail['path'], remnfs, jpath, nfshost[0], i_jail['name']))
+   log(0, "%s/%s/%s/rw/etc/fstab was created" % (jpath, nfshost[0], i_jail['name']))
+# create remote info file
+   os.system('echo \"nfs location: %s \" > %s/%s/%s/remote.info.jadm' % (rpath, jpath, nfshost[0], i_jail['name']))
+   os.system('echo \"nfs BASE:     %s \" >> %s/%s/%s/remote.info.jadm' % (brpath, jpath, nfshost[0], i_jail['name']))
+   os.system('echo \"date added:   %s \" >> %s/%s/%s/remote.info.jadm' % (dt, jpath, nfshost[0], i_jail['name']))
+
+      # os.system('echo \"%s/rw %s/mnt/SROOT nullfs rw 0 0\" >> %s/etc/fstab' % (rpath, jpath, i_jail['path']))
+
+   update_jail_conf(['new_jail', [i_jail], 'create'])
    log(0, "jail '%s' was successful imported from '%s'!" % (i_jail['name'], rpath), 1)
 
 # unmount and remove tempoary folder
