@@ -60,7 +60,7 @@ import argparse
 ########################################################################################
 
 # jadm version
-jadm_version = "ver. 2.0.4"
+jadm_version = "ver. 2.0.6"
 
 # jail.conf location by default /etc/jail.conf
 jailconf = '/etc/jail.conf'
@@ -1891,13 +1891,13 @@ def cli():
    parser.add_argument('-g','--gateways', help='list bridge gateways', action='store_true')
    parser.add_argument('-jl','--locals', nargs='*', help='jail local settings')
    parser.add_argument('-jg','--globals', nargs='*', help='jails global settings')
-   parser.add_argument('-d','--detroy', nargs='*', help='destroy jail')
+   parser.add_argument('-d','--destroy', nargs='*', help='destroy jail')
    parser.add_argument('-r','--remove', nargs='*', help='remove jai;')
    parser.add_argument('-nm','--migrate', nargs='*', help='migrate jail to netwrok server')
    parser.add_argument('-ns','--server', nargs='*', help='jadm network server')
 
-   parser.add_argument('-c', '--create', help='create new jail')
-   parser.add_argument('-m', '--modify', help='modify jail')
+   parser.add_argument('-c', '--create', nargs='*', help='create new jail')
+   parser.add_argument('-m', '--modify', nargs='*', help='modify jail')
    parser.add_argument('-i', '--info', help='sytem info', action='store_true')
    parser.add_argument('-y', '--yes', help='auto confirm', action='store_true')
    parser.add_argument('-v', '--verbose', help='jail start/stop verbose output', action='store_true')
@@ -1928,9 +1928,6 @@ def cli():
    if p['update'] == True:
       fix_jailconf(jailconf)
       sys.exit(0)
-   if p['create'] != None and p['modify'] != None:
-      log(2, "(c)reate and (m)odify cannot be used together!")
-      sys.exit(2)
    if p['list'] != False:
       lcmd().onecmd('list')
    if p['jls'] != False:
@@ -1938,15 +1935,20 @@ def cli():
    if p['gateways'] != False:
       lcmd().onecmd('gateways')
 # cli create or modify jail
-   #if '-c' in sys.argv or '-m' in sys.argv:
-       #     jail_input_cli(sys.argv[1:])
-       #     sys.exit(0)
-   #else:
-    #  jadmCommand = ' '.join(sys.argv[1:])
+   if p['create'] != None and p['modify'] != None:
+      log(2, "(c)reate and (m)odify cannot be used together!")
+      sys.exit(2)
+   elif p['create'] != None:
+      createcli = ['-c']
+      createcli.extend(p['create'])
+      jail_input_cli(createcli)
+   elif p['modify'] != None:
+      modcli = ['-m']
+      modcli.extend(p['modify'])
+      jail_input_cli(modcli)
 
-   for i in ['verbose', 'yes', 'info', 'about', 'vhelp', 'update', 'list', 'jls', 'gateways']:
+   for i in ['verbose', 'yes', 'info', 'about', 'vhelp', 'update', 'list', 'jls', 'gateways', 'create', 'modify']:
       p.pop(i)
-   print p
    for i in p.keys():
        if p[i] != None:
           jcmd = ' '.join(p[i])
@@ -1976,7 +1978,6 @@ def jail_input_cli(cliargv):
 
 # check for existing jail name/id
    if 'id' in jail.keys() and 'name' not in jail.keys():
-     print jail['id']
      if len(jail['id']) > 2:
         log(2, "jail id was not specified correctly!")
         sys.exit(2)
