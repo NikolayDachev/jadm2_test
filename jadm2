@@ -53,6 +53,7 @@ import paramiko
 import socket
 import select
 import urllib
+import argparse
 
 ########################################################################################
 # Main config vars:
@@ -1876,57 +1877,80 @@ def cli():
    """
 ########################################################################################
 #  jadm command line interface
-#  -y, -c, -m, -v, -a, -i, -h, -update
+#
    """
 
-# cli auto confirm
-   if '-y' in sys.argv:
-      global autoc
-      autoc = 'y'
-      log(1, "auto confirm mode enable!")
+   parser = argparse.ArgumentParser(prog='jadm')
+   parser.add_argument('-s','--start',nargs='*', help='start jail')
+   parser.add_argument('-k','--stop', nargs='*', help='stop jail')
+   parser.add_argument('-sk','--reboot',nargs='*', help='reboot jail')
+   parser.add_argument('-sh','--shell', nargs='*', help='shell login to jail')
+   parser.add_argument('-l','--list', help='list available jails', action='store_true')
+   parser.add_argument('-sl','--jls', help='short list available jails', action='store_true')
+   parser.add_argument('-sn','--snap', nargs='*', help='zfs jails snaphosts')
+   parser.add_argument('-g','--gateways', help='list bridge gateways', action='store_true')
+   parser.add_argument('-jl','--locals', nargs='*', help='jail local settings')
+   parser.add_argument('-jg','--globals', nargs='*', help='jails global settings')
+   parser.add_argument('-d','--detroy', nargs='*', help='destroy jail')
+   parser.add_argument('-r','--remove', nargs='*', help='remove jai;')
+   parser.add_argument('-nm','--migrate', nargs='*', help='migrate jail to netwrok server')
+   parser.add_argument('-ns','--server', nargs='*', help='jadm network server')
 
-# cli verbose mode for start/stop jail
-   if '-v' in sys.argv:
+   parser.add_argument('-c', '--create', help='create new jail')
+   parser.add_argument('-m', '--modify', help='modify jail')
+   parser.add_argument('-i', '--info', help='sytem info', action='store_true')
+   parser.add_argument('-y', '--yes', help='auto confirm', action='store_true')
+   parser.add_argument('-v', '--verbose', help='jail start/stop verbose output', action='store_true')
+   parser.add_argument('-u', '--update', help='try to make /etc/jail.conf autoupdate (experimental)', action='store_true')
+   parser.add_argument('-a', '--about', help='about jadm', action='store_true')
+   parser.add_argument('-vh', '--vhelp', help='verbose help')
+   args = parser.parse_args()
+   p = vars(args)
+
+   for i in p.keys():
+      p[i.strip('-')] = p.pop(i)
+
+   if p['verbose'] == True:
       global verbose
       verbose = 1
       log(0, "run/stop jail verbose mode enable!")
-
+   if p['yes'] == True:
+      global autoc
+      autoc = 'y'
+      log(1, "auto confirm mode enable!")
+   if p['info'] == True:
+      welcome()
+   if p['about'] == True:
+      lcmd().onecmd('about')
+   if p['vhelp'] != None:
+      lcmd().onecmd('help %s' % p['vhelp'])
 # -update jail.conf in jadm format
-   if '-update' in sys.argv:
-       fix_jailconf(jailconf)
-       sys.exit(0)
-
-# remove ['-v', '-y'] from cmd list
-   sys.argv = [x for x in sys.argv if x not in ['-v', '-y']]
-
-   if sys.argv[1] in ['-c', '-m', '-i', '-a', '-h']:
+   if p['update'] == True:
+      fix_jailconf(jailconf)
+      sys.exit(0)
+   if p['create'] != None and p['modify'] != None:
+      log(2, "(c)reate and (m)odify cannot be used together!")
+      sys.exit(2)
+   if p['list'] != False:
+      lcmd().onecmd('list')
+   if p['jls'] != False:
+      lcmd().onecmd('jls')
+   if p['gateways'] != False:
+      lcmd().onecmd('gateways')
 # cli create or modify jail
-      if '-c' in sys.argv or '-m' in sys.argv:
-            if '-c' in sys.argv and '-m' in sys.argv:
-                log(2, "-(c)reate and -(m)odify cannot be used together!")
-                sys.exit(2)
+   #if '-c' in sys.argv or '-m' in sys.argv:
+       #     jail_input_cli(sys.argv[1:])
+       #     sys.exit(0)
+   #else:
+    #  jadmCommand = ' '.join(sys.argv[1:])
 
-            jail_input_cli(sys.argv[1:])
-            sys.exit(0)
-
-# cli jail - os info
-      if sys.argv[1] == '-i':
-            welcome()
-            sys.exit(0)
-      if sys.argv[1] == '-a':
-            lcmd().onecmd('about')
-            sys.exit(0)
-      if sys.argv[1] == '-h':
-            lcmd().onecmd('cli')
-            lcmd().onecmd('help')
-            sys.exit(0)
-
-      jadmCommand = ''
-   else:
-      jadmCommand = ' '.join(sys.argv[1:])
-
-# cli command
-   lcmd().onecmd(jadmCommand)
+   for i in ['verbose', 'yes', 'info', 'about', 'vhelp', 'update', 'list', 'jls', 'gateways']:
+      p.pop(i)
+   print p
+   for i in p.keys():
+       if p[i] != None:
+          jcmd = ' '.join(p[i])
+          lcmd().onecmd("%s %s" % (i, jcmd))
 
 def jail_input_cli(cliargv):
    """
