@@ -2057,7 +2057,6 @@ def jail_input_cli(cliargv):
              jail[i] = jail[i][0]
 
 # check jail id 'jid'
-   for i in jail.keys():
       if i == 'id':
          if '-m' in cliargv:
             if jail['id'] == modjail['jid']:
@@ -2068,7 +2067,6 @@ def jail_input_cli(cliargv):
             new_jail['jid'] = jail['id']
 
 # check if jail is vnet and gateway
-   for i in jail.keys():
       if i == 'vnet':
           if '-m' in cliargv:
              if jail[i] == modjail['$jgw']:
@@ -2085,22 +2083,23 @@ def jail_input_cli(cliargv):
              new_jail['vnet'] = 1
 
 # check jail ip address
-   for i in jail.keys():
       if i == 'ip':
           if '-m' in cliargv:
              if jail[i] == modjail['$jip']:
                 break
-          ip = check_jail_Setting(i, [jail['ip'], new_jail, modjail])
-          if ip == False:
-             sys.exit(2)
-          else:
-             if ip == modjail['$jip'][:-3]:
-                new_jail['$jip'] = '%s%s' % (ip, modjail['$jip'][-3:])
+          if jail['ip'] != 'dhcp':
+             ip = check_jail_Setting(i, [jail['ip'], new_jail, modjail])
+             if ip == False:
+                sys.exit(2)
              else:
-                new_jail['$jip'] = ip
+                if ip == modjail['$jip'][:-3]:
+                   new_jail['$jip'] = '%s%s' % (ip, modjail['$jip'][-3:])
+                else:
+                   new_jail['$jip'] = ip
+          else:
+             new_jail['$jip'] = 'dhcp'
 
 # check jail hostname
-   for i in jail.keys():
       if i == 'hostname':
           if '-m' in cliargv:
              if jail[i] == modjail['host.hostname']:
@@ -2111,7 +2110,6 @@ def jail_input_cli(cliargv):
               new_jail['host.hostname'] = jail[i]
 
 # check jail path
-   for i in jail.keys():
       if i == 'path':
           jpath = "%s/%s" % (jail[i], new_jail['name'])
           if '-m' in cliargv:
@@ -2123,7 +2121,6 @@ def jail_input_cli(cliargv):
               new_jail['path'] = jpath
 
 # check jail zfs
-   for i in jail.keys():
       if i == 'zfs':
           if '-m' in cliargv:
              if modjail['zfs'] == 0:
@@ -2151,7 +2148,6 @@ def jail_input_cli(cliargv):
                 break
 
 # check install src
-   for i in jail.keys():
       if i == 'install' and '-m' not in cliargv:
          if jail[i][0] != 'template' and len(jail[i]) == 1:
             if check_jail_Setting('install src', jail[i][0]) == False:
