@@ -1895,7 +1895,6 @@ def cli():
    parser.add_argument('-r','--remove', nargs='*', help='remove jai;')
    parser.add_argument('-nm','--migrate', nargs='*', help='migrate jail to netwrok server')
    parser.add_argument('-ns','--server', nargs='*', help='jadm network server')
-
    parser.add_argument('-c', '--create', nargs='*', help='create new jail')
    parser.add_argument('-m', '--modify', nargs='*', help='modify jail')
    parser.add_argument('-i', '--info', help='sytem info', action='store_true')
