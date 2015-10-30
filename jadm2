@@ -1850,6 +1850,7 @@ def BASE(src, path = None):
    os.system('mv %s/usr/share/keys/* SROOT/usr-share-keys/' % path)
    os.system('rm -rf %s/usr/share/keys/' % path)
    os.system('mv %s/tmp SROOT/' % path)
+   os.system('chmod 1777 SROOT/tmp')
    os.system('mv %s/var SROOT/' % path)
    os.system('mv %s/root SROOT/' % path)
    os.system('ln -s SROOT/etc etc')
