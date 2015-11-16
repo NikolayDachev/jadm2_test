@@ -60,7 +60,7 @@ import argparse
 ########################################################################################
 
 # jadm version
-jadm_version = "ver. 2.0.6"
+jadm_version = "ver. 2.0.7"
 
 # jail.conf location by default /etc/jail.conf
 jailconf = '/etc/jail.conf'
@@ -127,14 +127,22 @@ def jadm_postinstall(new_jail_path):
 #
    """
 # simple echo to new jail /etc/ config
-   os.system("echo '# Added by JADM' >> %s" % (new_jail_path+"/etc/rc.conf"))
-   os.system("echo 'sendmail_enable=\"NONE\"' >> %s" % (new_jail_path+"/etc/rc.conf"))
-   os.system("echo 'firewall_enable=\"YES\"' >> %s" % (new_jail_path+"/etc/rc.conf"))
-   os.system("echo 'firewall_script=\"/etc/rc.firewall\"' >> %s" % (new_jail_path+"/etc/rc.conf"))
-   os.system("echo 'firewall_type=\"OPEN\"' >> %s" % (new_jail_path+"/etc/rc.conf"))
-   os.system("touch %s" % (new_jail_path+"/etc/resolv.conf"))
-   os.system("echo 'nameserver 8.8.8.8' >> %s" % (new_jail_path+"/etc/resolv.conf"))
+   os.system("echo '# Added by JADM' >> %s" % ospath(new_jail_path+"/etc/rc.conf"))
+   os.system("echo 'sendmail_enable=\"NONE\"' >> %s" % ospath(new_jail_path+"/etc/rc.conf"))
+   os.system("echo 'firewall_enable=\"YES\"' >> %s" % ospath(new_jail_path+"/etc/rc.conf"))
+   os.system("echo 'firewall_script=\"/etc/rc.firewall\"' >> %s" % ospath(new_jail_path+"/etc/rc.conf"))
+   os.system("echo 'firewall_type=\"OPEN\"' >> %s" % ospath(new_jail_path+"/etc/rc.conf"))
+   os.system("touch %s" % ospath(new_jail_path+"/etc/resolv.conf"))
+   os.system("echo 'nameserver 8.8.8.8' >> %s" % ospath(new_jail_path+"/etc/resolv.conf"))
    log(0, "postinstall was completed!")
+
+def ospath(path):
+    """
+########################################################################################
+# try to fix OS path var
+    """
+    fxpath = os.path.normpath(path)
+    return fxpath
 
 def load_jail_config(conf_f):
    """
@@ -259,7 +267,7 @@ def load_jail_config(conf_f):
 # is this zfs jail ?
          if x[0] == 'path':
 # if is SKEL jail will contain /mounts we don't need this
-             jail_dict['path'] = jail_dict['path'].replace('/mnt', '')
+             jail_dict['path'] = ospath(jail_dict['path'].replace('/mnt', ''))
              zfs_check = zfs(jail_dict['path'])
              jail_dict['zfs'] = zfs_check[2]
 
@@ -303,7 +311,7 @@ def find_global_path(gs, jname):
          for i in ('$name', '${name}'):
             if i in gpath:
                gpath = gpath.strip('path').strip('=').strip('"').strip("'").replace(i, jname)
-               return gpath
+               return ospath(gpath)
 
 def zfs(zvalue = None):
    """
@@ -1142,7 +1150,7 @@ def jail_input(modify = None):
                  if '/' != ekey[0]:
                      log(2, "'%s' is not valid path!" % ekey)
                      continue
-                 new_jail['path'] = ekey
+                 new_jail['path'] = ospath(ekey)
                  if new_jail['zfs'][0] != 'none':
                     new_jail['zfs'][2] = ekey
                  break
@@ -1452,8 +1460,7 @@ def create_jail(newjail):
       subprocess.call(['cp', '-R', '%s/SROOT/' % base['path'], '%s/rw' % newjail['path']])
 
 # create sekl jail fstab file
-      os.system('echo \"%s %s/mnt nullfs ro 0 0\" > %s/rw/etc/fstab' % (base['path'], newjail['path'], newjail['path']))
-      os.system('echo \"%s/rw %s/mnt/SROOT nullfs rw 0 0\" >> %s/rw/etc/fstab' % (newjail['path'], newjail['path'], newjail['path']))
+      base_jail_fstab(base['path'], newjail['path'])
 
    if newjail['install'][0] == 'template':
 # 1 find template
@@ -1471,8 +1478,7 @@ def create_jail(newjail):
             log(2, "'BASE' jail not exist!")
             return False
 # create sekl jail fstab file
-         os.system('echo \"%s %s/mnt nullfs ro 0 0\" > %s/rw/etc/fstab' % (base['path'], newjail['path'], newjail['path']))
-         os.system('echo \"%s/rw %s/mnt/SROOT nullfs rw 0 0\" >> %s/rw/etc/fstab' % (newjail['path'], newjail['path'], newjail['path']))
+         base_jail_fstab(base['path'], newjail['path'])
          newjail['install'][0] = 'skel'
        log(0, "jail was installed from template:' %s' " % newjail['install'][1])
    else:
@@ -1492,6 +1498,17 @@ def create_jail(newjail):
 # 6. jail completely installed
    log(0, "new jail '%s' was successful created!" % newjail['name'], 1)
 
+def base_jail_fstab(base_path, jail_path):
+    """
+########################################################################################
+#  create base jail fstab
+    """
+# fix jail rw/tmp
+    os.system('chmod 1777 %s/rw/tmp/' % jail_path)
+# create sekl jail fstab file
+    os.system('echo \"%s %s/mnt nullfs ro 0 0\" > %s/rw/etc/fstab' % (base_path, jail_path, jail_path))
+    os.system('echo \"%s/rw %s/mnt/SROOT nullfs rw 0 0\" >> %s/rw/etc/fstab' % (jail_path, jail_path, jail_path))
+
 def modify_jail(newjail):
    """
 ########################################################################################
@@ -1505,6 +1522,12 @@ def modify_jail(newjail):
        if i['name'] == newjail['modify']:
            modjail = i
            break
+# find BASE jail
+   for i in jails:
+       if i['name'] == 'BASE':
+           base = i
+           break
+
 # if this jail i running
    if modjail['active'] == 1:
        log(2, "jail '%s' is running!" % modjail['name'])
@@ -1534,11 +1557,14 @@ def modify_jail(newjail):
    if move_zfs_path == 0:
       if newjail['path'] != modjail['path']:
          subprocess.call(['mkdir', '-p', newjail['path']])
-         subprocess.call(['mv', '-f',modjail['path'], newjail['path']])
+         subprocess.call(['rm', '-rf', newjail['path']]) # this is not a mistake we want to remove last folder from newjail['path']
+         subprocess.call(['mv', '-f', modjail['path'], newjail['path']])
          log(0, "jail path '%s' was modified to '%s'!" % (modjail['path'], newjail['path']))
 
 # if we modify skeleton jail
    if 'SKEL' in newjail.keys():
+# fix fstab
+      base_jail_fstab(base['path'], newjail['path'])
       newjail['install'][0] = 'skel'
 
 # update jail.conf
@@ -1554,7 +1580,7 @@ def import_jail(jpath):
 #  check if japth folder exist and if we have /jpath/etc/jail.conf
    """
    jails = load_jail_config(jailconf)[0]
-
+   jpath = ospath(jpath)
    if os.path.isdir(jpath) == False:
        log(2, "'%s' not valid path!" % jpath)
        return False
@@ -1581,8 +1607,7 @@ def import_jail(jpath):
           log(2, "'BASE' jail not exist!")
           return False
 # create sekl jail fstab file
-       os.system('echo \"%s %s/mnt nullfs ro 0 0\" > %s/rw/etc/fstab' % (base['path'], jpath, jpath))
-       os.system('echo \"%s/rw %s/mnt/SROOT nullfs rw 0 0\" >> %s/rw/etc/fstab' % (jpath, jpath, jpath))
+       base_jail_fstab(base['path'], jpath)
 
    i_jail['path'] = jpath
 
@@ -1605,6 +1630,7 @@ def remote_nfs_jail(rpath, jpath):
 #
    """
    jails = load_jail_config(jailconf)[0]
+   jpath = ospath(jpath)
    brpath = "None"
    dt = str(datetime.now())
 
@@ -1790,7 +1816,7 @@ def BASE(src, path = None):
    if path[-1] == '/':
        path = path[:-1]
 
-   path = '%s/BASE' % path
+   path = ospath('%s/BASE' % path)
 # if folder exist exit
    if os.path.isdir('%s' % path) == True:
       log(2, "'%s' already exists!" % path)
