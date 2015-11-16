@@ -102,6 +102,23 @@ vnet = [
 'persist;'
 ]
 
+dhcp = [
+'### network settings ###',
+'vnet;',
+'vnet.interface = "epair${jid}b";',
+'exec.start = "ifconfig lo0 127.0.0.1/8";',
+'exec.prestart = "ifconfig epair${jid} create";',
+'exec.prestart += "ifconfig $bridge addm epair${jid}a up";',
+'exec.prestart += "ifconfig epair${jid}a up";',
+'exec.start += "dhclient epair${jid}b";',
+'exec.start += "/bin/sh /etc/rc";',
+'exec.poststop = "ifconfig $bridge deletem epair${jid}a";',
+'exec.poststop += "ifconfig epair${jid}a destroy";',
+'exec.stop = "/bin/sh /etc/rc.shutdown";',
+'exec.clean;',
+'persist;'
+]
+
 # no vnet
 net = [
 '### network settings ###',
@@ -459,7 +476,17 @@ def jail_table(mcmd):
        jail_temp_list.append(i['jid'])
        jail_temp_list.append(i['name'])
        jail_temp_list.append(i['host.hostname'])
-       jail_temp_list.append(i['$jip'])
+       if i['$jip'] == 'dhcp':
+           if i['active'] == 1:
+                out = subprocess.check_output(["jexec",  i['name'], "ifconfig", "epair3b"])
+                for ip in out.split(" "):
+                    if ch_ipv4(ip) == True and ip[-3:] != '255':
+                        dhip = ip
+                jail_temp_list.append('dhcp (%s)' % dhip)
+           else:
+                jail_temp_list.append('dhcp')
+       else:
+           jail_temp_list.append(i['$jip'])
        jail_temp_list.append(i['$jgw'])
        jail_temp_list.append(i['path'])
        if i['zfs'] != 0:
@@ -783,7 +810,10 @@ def update_jail_conf(update):
 # jail networking
       if jail['vnet'] == 1:
          jail_conf.extend(['$bridge = "%s";' % jail['$bridge']])
-         jail_conf.extend(vnet)
+         if jail['$jip'] == 'dhcp':
+             jail_conf.extend(dhcp)
+         else:
+             jail_conf.extend(vnet)
       else:
          jail_conf.extend(net)
 # if this is skel jail
@@ -1064,10 +1094,13 @@ def jail_input(modify = None):
 # enter ip address already 
            if ikey == 'ip':
               if 'dhcp' in ekey:
+                 if new_jail['vnet'] != 1:
+                     log(1, "'dhcp' can be used only with 'vnet' jail!")
+                     continue
                  new_jail['$jip'] = 'dhcp'
                  break
               ip = check_jail_Setting(ikey, [ekey, new_jail, modjail])
-              if ip == False:
+              if ip == False or ip == "":
                  continue
               else:
                  if ip == modjail['$jip'][:-3]:
@@ -2339,25 +2372,6 @@ def startstop_jail(jnid = None, action = None):
               return False
           ssjail = [isjail['name']]
 
-   def cehck_mac():
-      '''
-     check dhcp jail
-      '''
-      if isjail['$jip'] == 'dhcp':
-         checkmac = locals(isjail['name'], 'noop')
-         ether_find = 0
-         for e in checkmac:
-             if  'ether' in e[1]:
-                 ether_find = 1
-                 break
-         if ether_find == 0:
-             cmd = "jexec %s ifconfig epair%sb | awk '/ether/ {print $2}'" % (isjail['jid'],isjail['jid'])
-             ps = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-             jether = ps.communicate()[0].strip("\n")
-             log(1, "%s is 'dhcp' jail, adding permanet mac: '%s'" % (isjail['name'], jether))
-             locals(isjail['name'], 'add', 'exec.prestart += "ifconfig epair${jid}b ether %s"' % jether)
-         else:
-             return True
 # do action
    for i in ssjail:
       jail = {}
@@ -2378,14 +2392,12 @@ def startstop_jail(jnid = None, action = None):
                continue
             else:
                sAction('c',  jail['name'])
-               cehck_mac()
 # stop jail
          elif action == 'stop':
             if jail['active'] == 0:
                log(1, "'%s' already stopped!" % (jail['name']))
                continue
             else:
-               cehck_mac()
                sAction('r',  jail['name'])
 
 # reboot jail
