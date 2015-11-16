@@ -478,7 +478,7 @@ def jail_table(mcmd):
        jail_temp_list.append(i['host.hostname'])
        if i['$jip'] == 'dhcp':
            if i['active'] == 1:
-                out = subprocess.check_output(["jexec",  i['name'], "ifconfig", "epair3b"])
+                out = subprocess.check_output(["jexec",  i['name'], "ifconfig", "epair%sb" % i['jid']])
                 for ip in out.split(" "):
                     if ch_ipv4(ip) == True and ip[-3:] != '255':
                         dhip = ip
