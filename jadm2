@@ -899,9 +899,10 @@ def update_local_jail_conf(jail):
 # jail networking
    if 'vnet' in jail.keys():
          jail_conf.extend(['$bridge = "%s";' % jail['$bridge']])
-         jail_conf.extend(vnet)
-   else:
-         jail_conf.extend(net)
+         if jail['$jip'] == 'dhcp':
+             jail_conf.extend(dhcp)
+         else:
+             jail_conf.extend(vnet)
 # if this is skel jail
    if 'SKEL' in jail.keys():
          jail_conf.extend(['### BASE mount settings ###', 'mount.fstab = %s/rw/etc/fstab;' % jail['path'], 'mount.devfs;'])
