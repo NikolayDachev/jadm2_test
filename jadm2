@@ -338,12 +338,16 @@ def zfs(zvalue = None):
 #         zfs ( 0 if not exist) or [NAME,USED,AVAIL,REFER,MOUNTPOINT,QUOTA, SNAP_NUMBER])
 #
    """
-# check curent zfs pool
+
+# check for zfs.ko
    try:
-      zfs_name = subprocess.check_output("zfs list -H -o name", shell=True)
-      zfs_name = zfs_name.split('\n')
-   except:
+      subprocess.check_output("kldstat -m zfs", shell=True, stderr=subprocess.STDOUT)
+   except subprocess.CalledProcessError as e:
       return (None, None, 0)
+
+# check curent zfs pool
+   zfs_name = subprocess.check_output("zfs list -H -o name", shell=True)
+   zfs_name = zfs_name.split('\n')
 
    zfs_mountp = subprocess.check_output("zfs list -H -o mountpoint", shell=True)
    zfs_mountp = zfs_mountp.split('\n')
