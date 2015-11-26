@@ -339,8 +339,11 @@ def zfs(zvalue = None):
 #
    """
 # check curent zfs pool
-   zfs_name = subprocess.check_output("zfs list -H -o name", shell=True)
-   zfs_name = zfs_name.split('\n')
+   try:
+      zfs_name = subprocess.check_output("zfs list -H -o name", shell=True)
+      zfs_name = zfs_name.split('\n')
+   except:
+      return (None, None, 0)
 
    zfs_mountp = subprocess.check_output("zfs list -H -o mountpoint", shell=True)
    zfs_mountp = zfs_mountp.split('\n')
