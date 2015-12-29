@@ -671,6 +671,12 @@ def globals(action = None, setting = None):
 
 # add new global setting
    elif action == 'add':
+       if "path" in setting:
+           print setting.split('/')
+           if '$name' != setting.split('/')[-1]:
+               log(2, "no correct global path!")
+               log(0, "example: 'path=/jails_path/$name'")
+               return False
        if setting != None:
           if gsettings == []:
               gs_position = 0
@@ -1409,7 +1415,7 @@ def check_jail_Setting(setting, val):
          log(2, "'%s' is not correct zfs quota format!  xxx('K', 'M', 'G', 'T', 'P', 'E') " % val)
          return False
 
-# check is we can use path = val
+# check if we can use path = val
    if setting == 'path':
        if zfs(val)[2] == 1:
          log(2, "'%s' already exist zfs path!" % val)
@@ -1958,7 +1964,7 @@ def cli():
    parser.add_argument('-sn','--snap', nargs='*', help='zfs jails snaphosts')
    parser.add_argument('-g','--gateways', help='list bridge gateways', action='store_true')
    parser.add_argument('-jl','--locals', nargs='*', help='jail local settings')
-   parser.add_argument('-jg','--globals', nargs='*', help='jails global settings')
+   parser.add_argument('-jg','--globals', nargs='*', help="jails global settings .. add settings with ''")
    parser.add_argument('-d','--destroy', nargs='*', help='destroy jail')
    parser.add_argument('-r','--remove', nargs='*', help='remove jai;')
    parser.add_argument('-nm','--migrate', nargs='*', help='migrate jail to netwrok server')
