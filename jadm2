@@ -60,7 +60,7 @@ import argparse
 ########################################################################################
 
 # jadm version
-jadm_version = "ver. 2.0.7"
+jadm_version = "ver. 2.0.8"
 
 # jail.conf location by default /etc/jail.conf
 jailconf = '/etc/jail.conf'
@@ -707,16 +707,8 @@ def locals(j = None, action = None, setting = None):
    jails = load_jail_config(jailconf)[0]
 
 # find jail by id or name
-   jail = None
-   for i in jails:
-      if str(i['name']) == str(j):
-         jail = i
-         break
-      if str(i['jid']) == str(j):
-         jail = i
-         break
-   if jail == None:
-      log(2, "'%s' was not found in jails!" % j)
+   jail = find_jail(str(j))
+   if jail == False:
       return False
 
 # create jail locals list
@@ -1962,6 +1954,7 @@ def cli():
    parser.add_argument('-l','--list', help='list available jails', action='store_true')
    parser.add_argument('-sl','--jls', help='short list available jails', action='store_true')
    parser.add_argument('-sn','--snap', nargs='*', help='zfs jails snaphosts')
+   parser.add_argument('-ar','--archive', nargs='*', help='jails tar backup')
    parser.add_argument('-g','--gateways', help='list bridge gateways', action='store_true')
    parser.add_argument('-jl','--locals', nargs='*', help='jail local settings')
    parser.add_argument('-jg','--globals', nargs='*', help="jails global settings .. add settings with ''")
@@ -3193,6 +3186,74 @@ class net_server:
          log(2, "jadm cannot import '%s' from '%s'!" % (self.migname, self.migpath), 1)
          return False
 
+def find_jail(val):
+   '''
+########################################################################################
+#  check if jail exist
+#
+   '''
+   jails = load_jail_config(jailconf)[0]
+
+# check ifi jail exist
+   for j in jails:
+      if j['name'] == val:
+         return j
+      if j['jid'] == val:
+         return j
+      if val == 'BASE':
+         return False
+   log(2, "'%s' is a not existing jail!" % val)
+   return False
+
+class archive:
+    '''
+########################################################################################
+# tar archive/restore
+#
+    '''
+    def __init__(self, jail, sd):
+        self.jail = jail
+        self.sd = sd
+        self.dt = str(datetime.now().strftime('%Y-%m-%d_%s'))
+        self.archname = "%s_%s.tar.gz" % (self.jail['name'], self.dt)
+        self.jpath = self.jail['path']
+        if self.jail['SKEL'] == 1:
+            self.archfolder = './rw'
+        else:
+            self.archfolder = '.'
+
+    def create(self):
+        if self.jail['active'] == 1:
+           log(1, "jail '%s' is running!" % self.jail['name'])
+        if os.path.isdir(self.sd) == False:
+            log(2, "'%s' not existing folder!" % self.sd)
+            return False
+
+        log(0, "archive path: %s" % self.jpath)
+        log(0, "make '%s' > '%s/%s' archive in progress!" % (self.jpath, self.sd, self.archname))
+        try:
+           subprocess.check_call(['tar', '-czf', '%s/%s' %(self.sd, self.archname), '-C', self.jpath, self.archfolder])
+        except:
+           log(2, "'%s/%s' archive was not created!" % (self.sd, self.archname))
+           return False
+        log(0, "'%s/%s' archive was created!" % (self.sd, self.archname))
+        return True
+
+    def restore(self):
+        if self.jail['active'] == 1:
+           log(2, "jail '%s' is running!" % self.jail['name'])
+           return False
+        if os.path.isfile(self.sd) == False and '.tar.gz' not in self.sd:
+           log(2, "'%s' not existing tar file!" % self.sd)
+           return False
+        try:
+           subprocess.check_call(['tar', '-zxf', self.sd, '-C', self.jpath])
+        except:
+           log(2, "'%s' archive was not restored!" % (self.sd))
+           return False
+        log(0, "'%s' archive was restored!" % (self.sd))
+        return True
+
 ########################################################################################
 # MAIN MENU
 ########################################################################################
@@ -3217,6 +3278,7 @@ class lcmd(cmd.Cmd):
               'vnet', 'novnet', 'zfs', 'nozfs',
               'skel', 'noskel', 'quota', 'used', 'empty']
    mserver = ['server',  'client']
+   archive = ['create',  'restore']
 
    def emptyline(self):
          pass
@@ -3769,6 +3831,38 @@ Can use any jadm command directly from OS cli (except 'server')
    -- jadm cannot guaranty 100% success, backup file will be created.
       """
       lcmd().onecmd('help cli')
+
+   def do_archive(self, arg):
+     """
+-- USAGE: archive
+   - create new tar archive (usage: archive 'name/jid' create '/tar/archive/destination/folder')
+   - restore tar archive (usage: archive 'name/jid' restore '/destination/folder/file name.tar.gz')
+     """
+     arg = str(arg).split(' ')
+     arg = [i for i in arg if i != '']
+
+     if len(arg) == 3 and arg[1] == 'create':
+        jail = find_jail(arg[0])
+        if jail:
+           arch = archive(jail, arg[2])
+           arch.create()
+     elif len(arg) == 3 and  arg[1] == 'restore':
+        jail = find_jail(arg[0])
+        if jail:
+           arch = archive(jail, arg[2])
+           arch.restore()
+     else:
+        log(2, "Please enter 'help archive' for valid commands!")
+
+   def complete_archive(self, text, line, begidx, endidx):
+        if not text:
+            completions = self.archive[:]
+        else:
+            completions = [ f
+                            for f in self.archive
+                            if f.startswith(text)
+                            ]
+        return completions
 
 ########################################################################################
 # Start Jadm script
