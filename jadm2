@@ -60,7 +60,7 @@ import argparse
 ########################################################################################
 
 # jadm version
-jadm_version = "ver. 2.0.8"
+jadm_version = "ver. 2.0.9"
 
 # jail.conf location by default /etc/jail.conf
 jailconf = '/etc/jail.conf'
@@ -3568,15 +3568,16 @@ Destroy jail and delete jail data/zfs
         """
         arg = str(arg).split(' ')
         arg = [i for i in arg if i != '']
-
-        if arg[0] == 'BASE' or arg[0] == '0':
-           if arg[0] == '0':
-              arg[0] = 'BASE'
-           if len(arg) > 1:
-              if arg[1] == 'clear':
-                 jail_destroy(arg[0], 'destroy', 'clear')
-
-        jail_destroy(arg[0], 'destroy')
+        try:
+           if arg[0] == 'BASE' or arg[0] == '0':
+              if arg[0] == '0':
+                 arg[0] = 'BASE'
+              if len(arg) > 1:
+                 if arg[1] == 'clear':
+                    jail_destroy(arg[0], 'destroy', 'clear')
+           jail_destroy(arg[0], 'destroy')
+        except:
+           log(2, "Please enter 'help destroy' for valid commands!")
 
    def do_remove(self, arg):
         """
@@ -3698,14 +3699,16 @@ Jail ZFS snapshots
         if len(arg) == 1:
            jlist.list(arg[0])
 
-        if len(arg) == 2 and arg[1] == 'create':
+        elif len(arg) == 2 and arg[1] == 'create':
            jlist.create(arg[0])
 
-        if len(arg) == 3 and  arg[1] == 'remove':
+        elif len(arg) == 3 and  arg[1] == 'remove':
            jlist.remove(arg[0], arg[2])
 
-        if len(arg) == 3 and  arg[1] == 'restore':
+        elif len(arg) == 3 and  arg[1] == 'restore':
            jlist.restore(arg[0], arg[2])
+        else:
+           log(2, "Please enter 'help snap' for valid commands!")
 
    def complete_snap(self, text, line, begidx, endidx):
         if not text:
@@ -3795,13 +3798,17 @@ Migrate jail(s) to remote server (NO encryption!)
         nport = LPORT
 
 # use custom port if is needed
-        server = str(arg[0]).split(':')
-        rip = server[0]
-        if len(server) == 2:
-            if server[1] != nport:
+        try:
+           server = str(arg[0]).split(':')
+           rip = server[0]
+           if len(server) == 2:
+              if server[1] != nport:
                 rport = server[1]
-        else:
-            rport = nport
+           else:
+              rport = nport
+        except:
+              log(2, "Please enter 'help migrate' for valid commands!")
+              return False
 
 # list for multiple jails and migrate
         mjails = ' '.join(arg[1:]).split(',')
