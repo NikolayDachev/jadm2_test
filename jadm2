@@ -60,7 +60,7 @@ import argparse
 ########################################################################################
 
 # jadm version
-jadm_version = "ver. 2.0.9"
+jadm_version = "ver. 2.1.0"
 
 # jail.conf location by default /etc/jail.conf
 jailconf = '/etc/jail.conf'
@@ -231,7 +231,7 @@ def load_jail_config(conf_f):
    jails = []
 
    for i in jsname:
-      jail_dict = {'name':i[0][0], 'host.hostname':'', 'jid':'', '$jip':'',
+      jail_dict = {'name':i[0][0], 'host.hostname':None, 'jid':'', '$jip':'',
                    '$jgw':'','path':'', 'zfs':0}
 
       i = mas.index(i[0])
@@ -310,6 +310,14 @@ def load_jail_config(conf_f):
       zfs_check = zfs(jail_dict['path'])
       jail_dict['zfs'] = zfs_check[2]
 
+# check for inside jail hostname config
+      if jail_dict['host.hostname'] == None or jail_dict['host.hostname'] == "":
+         if jail_dict['active'] == 1:
+          try:
+             inside_hostname = subprocess.check_output(['jexec', jail_dict['jid'], 'hostname'])
+             jail_dict['host.hostname'] = inside_hostname
+          except:
+             pass
 # end add this jail and go with the next one
       jails.append(jail_dict)
 
@@ -1064,7 +1072,7 @@ def jail_input(modify = None):
 # enter jail hostname
            if ikey == 'hostname':
               if check_jail_Setting(ikey, ekey) == False:
-                 continue
+                 pass
               else:
                  new_jail['host.hostname'] = ekey
                  break
@@ -1318,8 +1326,7 @@ def check_jail_Setting(setting, val):
        for j in jails:
           exist.append (j['host.hostname'])
        if val in exist:
-          log(2, "Jail with %s '%s' already exist!" % (setting, val))
-          return False
+          log(1, "Jail with %s '%s' already exist!" % (setting, val))
 
 # cehck vnet = val and return gateway
    if setting == 'vnet':
@@ -2034,7 +2041,7 @@ def jail_input_cli(cliargv):
    modjail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
                '$jgw':'','path':'', 'zfs':['', '', ''] }
    jail = {}
-   input_keys = ['name', 'id', 'hostname', 'ip', 'path', 'install']
+   input_keys = ['name', 'id', 'ip', 'path', 'install']
 
 # pars all sys_argv arguments to jail config
    for i in cliargv:
@@ -2172,7 +2179,7 @@ def jail_input_cli(cliargv):
              if jail[i] == modjail['host.hostname']:
                 break
           if check_jail_Setting(i, jail[i]) == False:
-              sys.exit(2)
+              pass
           else:
               new_jail['host.hostname'] = jail[i]
 
