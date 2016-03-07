@@ -60,7 +60,7 @@ import argparse
 ########################################################################################
 
 # jadm version
-jadm_version = "ver. 2.1.0"
+jadm_version = "ver. 2.1.2"
 
 # jail.conf location by default /etc/jail.conf
 jailconf = '/etc/jail.conf'
@@ -245,7 +245,9 @@ def load_jail_config(conf_f):
 # Find jail local settingss
          if z[0] == _Lsettings:
             jail_local_settings_index = jail_dict['jbegin'] + x
-
+# Find if this is linked jail
+         if '#<' in z[0]:
+             jail_dict['LINKED'] = z[0].strip('#<')
 # Find jail end index
          if "}" in z:
             x -= 1
@@ -487,6 +489,8 @@ def jail_table(mcmd):
            jail_temp_list[0] =  jail_temp_list[0] + 'S'
        if 'vnet' in i.keys():
            jail_temp_list[0] =  jail_temp_list[0] + 'V'
+       if 'LINKED' in i.keys():
+           jail_temp_list[0] =  jail_temp_list[0] + 'L%s' % i['LINKED']
        jail_temp_list.append(i['active'])
        jail_temp_list.append(i['jid'])
        jail_temp_list.append(i['name'])
@@ -810,7 +814,10 @@ def update_jail_conf(update):
                    '$jip = "%s";' % jail['$jip'],
                    '$jgw = "%s";' % jail['$jgw'],
                    'host.hostname = "%s";' % jail['host.hostname']]
-
+# if is linked jail
+      if 'linked' in jail['install']:
+         jail_conf.insert(3, "#< %s" % jail['install'][2])
+         mset = 'LINKED'
 # if we add remote jail
       if jail['install'][0] == 'nfs':
          jail['install'][0] = 'skel'
@@ -832,7 +839,9 @@ def update_jail_conf(update):
 # if this is skel jail
       if jail['install'][0] == 'skel':
          jail_conf.extend(['### %s mount settings ###' % mset, 'mount.fstab = %s/rw/etc/fstab;' % jail['path'], 'mount.devfs;'])
-
+# if is linked jail
+      if 'linked' in jail['install']:
+         jail_conf.extend(['### %s mount settings ###' % mset, 'mount.fstab = %s/etc/fstab;' % jail['path'], 'mount.devfs;'])
 # update jlc[]
       if update[2] == 'create':
 # if this is remote jail
@@ -877,7 +886,7 @@ def update_jail_conf(update):
    jc.close()
 
 # update local jail /etc/jail.conf
-# ljail = jail['name']
+   ljail = jail['name']
    if update[0] == 'new_jail':
       update_local_jail_conf(ljail)
 
@@ -904,6 +913,10 @@ def update_local_jail_conf(jail):
                    '$jip = "%s";' % jail['$jip'],
                    '$jgw = "%s";' % jail['$jgw'],
                    'host.hostname = "%s";' % jail['host.hostname']]
+# if is linked jail
+   if 'linked' in jail['install']:
+      jail_conf.insert(3, "#< %s" % jail['install'][2])
+      mset = 'LINKED'
 # jail path add /mnt is this is skel jail
    if 'SKEL' in jail.keys():
          jail_conf.extend(['path = "%s/mnt";' % jail['path']])
@@ -919,7 +932,9 @@ def update_local_jail_conf(jail):
 # if this is skel jail
    if 'SKEL' in jail.keys():
          jail_conf.extend(['### BASE mount settings ###', 'mount.fstab = %s/rw/etc/fstab;' % jail['path'], 'mount.devfs;'])
-
+# if is linked jail
+   if 'linked' in jail['install']:
+      jail_conf.extend(['### %s mount settings ###' % mset, 'mount.fstab = %s/etc/fstab;' % jail['path'], 'mount.devfs;'])
 # add local settings
    jail_conf.extend(['#@# local settings #@#'])
    for i in jail['local_settings']:
@@ -972,7 +987,7 @@ def jail_input(modify = None):
       input_keys = ['name', 'id', 'hostname','vnet', 'ip', 'zfs', 'path', 'install src']
       settings_menu = ['Jail', 'Setting']
       new_jail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
-               '$jgw':'system','path':'', 'zfs':['none', 'none', 'none'], 'vnet':0, 'gwnetmask':''}
+               '$jgw':'system','path':'', 'zfs':['none', 'none', 'none'], 'vnet':0, 'gwnetmask':'', 'linked':0}
       modjail = {'name':'', 'host.hostname':'', 'jid':'', '$jip':'',
                '$jgw':'','path':'', 'zfs':['', '', ''] }
    else:
@@ -1004,7 +1019,7 @@ def jail_input(modify = None):
            if ikey == 'install src':
              print ""
              print tabulate([['template', 'existing jail for template' ], ['bsd',  'bdsinstaller'],  ['src', 'bsd pre compiled sources /usr/src/' ],
-                            ["skel", "jail skeleton model"]], ['Install Source',  'Description'])
+                            ["skel", "jail skeleton model"], ["linked", "unionfs linked jail"]], ['Install Source',  'Description'])
 
            if modify != None:
               input_keys_correction = ['name', 'jid', 'host.hostname','vnet', '$jip', 'zfs', 'path']
@@ -1211,10 +1226,13 @@ def jail_input(modify = None):
                  break
 
 # print existing jails table if we will use template for install
-   if new_jail['install'][0] == 'template':
+   if new_jail['install'][0] == 'template' or new_jail['install'][0] == 'linked':
       while True:
          print ""
-         jail_table(['jls'])
+         if new_jail['install'][0] == 'linked':
+            jail_table(['jls', 'noskel'])
+         else:
+            jail_table(['jls'])
          ekey = raw_input('enter %s name/jid %s' % (new_jail['install'][0], prompt))
 # exit
          if '!' in ekey:
@@ -1225,6 +1243,8 @@ def jail_input(modify = None):
             continue
          else:
             new_jail['install'][1] = template
+            if new_jail['install'][0] == 'linked':
+               new_jail['linked'] == [ekey]
             break
 
 # print settings before confirm
@@ -1325,6 +1345,8 @@ def check_jail_Setting(setting, val):
        exist = []
        for j in jails:
           exist.append (j['host.hostname'])
+       if val in ['', ' ', '    ']:
+           log(1, "Jail with empty hostname!")
        if val in exist:
           log(1, "Jail with %s '%s' already exist!" % (setting, val))
 
@@ -1426,11 +1448,11 @@ def check_jail_Setting(setting, val):
 
 # check install source
    if setting == 'install src':
-       install_src = ['bsd', 'template', 'skel', 'src']
+       install_src = ['bsd', 'template', 'skel', 'src', 'linked']
        if val not in install_src:
           log(2, "enter only  %s for install source!" % install_src)
           return False
-       if val == 'template':
+       if val == 'template' or val == 'linked':
           if jails == False:
               log(2, "Jail list is empty!")
               return False
@@ -1476,6 +1498,8 @@ def create_jail(newjail):
    if newjail['zfs'][0] != 'none':
       subprocess.call(['zfs', 'create', '%s' % newjail['zfs'][0]])
       subprocess.call(['zfs', 'set', 'mountpoint=%s' % newjail['path'], '%s' % newjail['zfs'][0]])
+      subprocess.call(['zfs', 'set', 'jailed=on', '%s' % newjail['zfs'][0]])
+      subprocess.call(['zfs', 'jail', newjail['jid'], '%s' % newjail['zfs'][0]])
       log(0 ,"jail zfs '%s' was created!" % newjail['zfs'][0])
 
       if newjail['zfs'][1] != 'none':
@@ -1484,6 +1508,9 @@ def create_jail(newjail):
 
 # 3. select install method
    if newjail['install'][0] == 'bsd':
+      hwplatform = subprocess.check_output(['uname', '-m']).strip('\n')
+      release =  subprocess.check_output(['uname', '-r'])[:4].strip('\n')
+      os.environ["BSDINSTALL_DISTSITE"] = "http://ftp.freebsd.org/pub/FreeBSD/releases/%s/%s-RELEASE" % (hwplatform, release)
       subprocess.call(['bsdinstall', 'jail', '%s' % newjail['path']])
 
    if newjail['install'][0] == 'src':
@@ -1507,6 +1534,16 @@ def create_jail(newjail):
 
 # create sekl jail fstab file
       base_jail_fstab(base['path'], newjail['path'])
+
+   if newjail['install'][0] == 'linked':
+       link = check_jail_Setting('modify', newjail['install'][1])
+       if 'SKEL' in link.keys():
+           log(2, "link: '%s' is a skeleton model jail! " % newjail['install'][1])
+           log(2, "skeleton jail cannot be used for linked jail!")
+           return False
+       newjail['install'].append(link['jid'])
+       linked_jail_fstab(link['path'], newjail['path'])
+       log(0, "jail was installed from link:' %s' " % newjail['install'][1])
 
    if newjail['install'][0] == 'template':
 # 1 find template
@@ -1543,6 +1580,15 @@ def create_jail(newjail):
 
 # 6. jail completely installed
    log(0, "new jail '%s' was successful created!" % newjail['name'], 1)
+
+def linked_jail_fstab(link_path, jail_path):
+    """
+########################################################################################
+#  create linked jail fstab
+    """
+# create linked jail fstab file
+    os.system('mkdir -p %s/etc' % jail_path)
+    os.system('echo \"%s %s unionfs rw,below 0 0\" > %s/etc/fstab' % (link_path, jail_path, jail_path))
 
 def base_jail_fstab(base_path, jail_path):
     """
