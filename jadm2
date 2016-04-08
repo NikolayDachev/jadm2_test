@@ -60,7 +60,7 @@ import argparse
 ########################################################################################
 
 # jadm version
-jadm_version = "ver. 2.1.2"
+jadm_version = "ver. 2.1.3"
 
 # jail.conf location by default /etc/jail.conf
 jailconf = '/etc/jail.conf'
@@ -464,6 +464,16 @@ def jail_table(mcmd):
            elif mcmd[1] == 'noskel':
                if 'SKEL' not in i.keys():
                   jails_configs.append(i)
+           elif mcmd[1] == 'nolinkedskel':
+               if 'SKEL' not in i.keys():
+                  if 'LINKED' not in i.keys():
+                     jails_configs.append(i)
+           elif mcmd[1] == 'linked':
+               if 'LINKED' in i.keys():
+                  jails_configs.append(i)
+           elif mcmd[1] == 'nolinked':
+               if 'LINKED' not in i.keys():
+                  jails_configs.append(i)
            elif mcmd[1] == 'vnet':
                if 'vnet' in i.keys():
                   jails_configs.append(i)
@@ -815,7 +825,7 @@ def update_jail_conf(update):
                    '$jgw = "%s";' % jail['$jgw'],
                    'host.hostname = "%s";' % jail['host.hostname']]
 # if is linked jail
-      if 'linked' in jail['install']:
+      if jail['install'][0] == 'linked':
          jail_conf.insert(3, "#< %s" % jail['install'][2])
          mset = 'LINKED'
 # if we add remote jail
@@ -840,7 +850,7 @@ def update_jail_conf(update):
       if jail['install'][0] == 'skel':
          jail_conf.extend(['### %s mount settings ###' % mset, 'mount.fstab = %s/rw/etc/fstab;' % jail['path'], 'mount.devfs;'])
 # if is linked jail
-      if 'linked' in jail['install']:
+      if jail['install'][0] == 'linked':
          jail_conf.extend(['### %s mount settings ###' % mset, 'mount.fstab = %s/etc/fstab;' % jail['path'], 'mount.devfs;'])
 # update jlc[]
       if update[2] == 'create':
@@ -914,8 +924,8 @@ def update_local_jail_conf(jail):
                    '$jgw = "%s";' % jail['$jgw'],
                    'host.hostname = "%s";' % jail['host.hostname']]
 # if is linked jail
-   if 'linked' in jail['install']:
-      jail_conf.insert(3, "#< %s" % jail['install'][2])
+   if 'LINKED' in jail.keys():
+      jail_conf.insert(3, "#< %s" % jail['LINKED'])
       mset = 'LINKED'
 # jail path add /mnt is this is skel jail
    if 'SKEL' in jail.keys():
@@ -933,7 +943,7 @@ def update_local_jail_conf(jail):
    if 'SKEL' in jail.keys():
          jail_conf.extend(['### BASE mount settings ###', 'mount.fstab = %s/rw/etc/fstab;' % jail['path'], 'mount.devfs;'])
 # if is linked jail
-   if 'linked' in jail['install']:
+   if 'LINKED' in jail.keys():
       jail_conf.extend(['### %s mount settings ###' % mset, 'mount.fstab = %s/etc/fstab;' % jail['path'], 'mount.devfs;'])
 # add local settings
    jail_conf.extend(['#@# local settings #@#'])
@@ -1230,7 +1240,7 @@ def jail_input(modify = None):
       while True:
          print ""
          if new_jail['install'][0] == 'linked':
-            jail_table(['jls', 'noskel'])
+            jail_table(['jls', 'nolinkedskel'])
          else:
             jail_table(['jls'])
          ekey = raw_input('enter %s name/jid %s' % (new_jail['install'][0], prompt))
